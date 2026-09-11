@@ -1,0 +1,51 @@
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { ActivityIndicator, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+      <StatusBar style="auto" />
+    </SafeAreaProvider>
+  );
+}
+
+/**
+ * Stack.Protected's guard is evaluated on every render, so a case-detail
+ * link never briefly flashes before redirecting to sign-in. It replaces the
+ * older pattern of reading useSegments() and calling router.replace() by
+ * hand — this is the current Expo Router API (SDK 57 / expo-router ~57.0),
+ * not what earlier training data would suggest.
+ */
+function RootNavigator() {
+  const { session, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <Stack>
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="(app)" options={{ headerShown: false }} />
+      </Stack.Protected>
+
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="sign-in" options={{ title: "mycase pro" }} />
+      </Stack.Protected>
+
+      {/* Reachable regardless of session state — it's what CREATES the
+          session from an incoming magic-link deep link. */}
+      <Stack.Screen name="auth/confirm" options={{ title: "Signing in…" }} />
+    </Stack>
+  );
+}
