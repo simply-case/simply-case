@@ -158,11 +158,11 @@ enabled = true
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://localhost:3000"
+site_url = "https://simply-case-web.vercel.app"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = []
+additional_redirect_urls = ["http://localhost:3000/**", "https://simply-case-web.vercel.app/**", "mycasepro://**", "exp://**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -253,6 +253,14 @@ user = "resend"
 pass = "env(RESEND_API_KEY)"
 admin_email = "onboarding@resend.dev"
 sender_name = "mycase pro"
+
+# The hosted default "Confirm signup" template was failing to render/send
+# (every brand-new password signup returned HTTP 500 "Error sending
+# confirmation email", while magic-link sends to existing users worked
+# fine). Overriding it with our own known-good template fixes new signups.
+[auth.email.template.confirmation]
+subject = "Confirm your mycase pro email"
+content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

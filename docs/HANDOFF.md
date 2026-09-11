@@ -20,8 +20,8 @@ history and push/email notifications on change. Web (Next.js) + mobile
 ## Stack
 
 Next.js (App Router) + TypeScript · Supabase (Postgres/Auth/Edge
-Functions) · Expo/React Native · Resend (email) · Vercel (web hosting,
-being set up now) · npm workspaces monorepo.
+Functions) · Expo/React Native · Resend (email) · Vercel (deployed at
+https://simply-case-web.vercel.app) · npm workspaces monorepo.
 
 ## What's built and verified working (Phases 0–6)
 
@@ -71,31 +71,60 @@ and how.
    `check-cases` enqueues on a status change. Respects per-user quiet
    hours. Push notifications NOT built yet (needs Apple/Google dev
    accounts — see below).
+8. **Deployed to Vercel** — https://simply-case-web.vercel.app, project
+   `simply-case-web`, root dir `apps/web`. Only 3 env vars needed
+   (all NEXT_PUBLIC_, none secret): SUPABASE_URL,
+   SUPABASE_PUBLISHABLE_KEY, SITE_URL. The web app never reads the
+   Supabase secret key by design.
 
-## In progress right now
+## THE ONE BLOCKER FOR REAL USERS: verify a Resend domain
 
-**Vercel deploy of apps/web.** Import screen is open in the Vercel
-dashboard: project `simply-case-web`, root directory `apps/web` (correct),
-Next.js preset (correct). Three env vars need adding before clicking
-Deploy — none are secrets, the web app never touches the Supabase secret
-key by design:
+**Symptom:** password signup with any email other than the Resend account
+owner's returns HTTP 500 "Error sending confirmation email". Magic link to
+mannmankirat@gmail.com works fine.
 
-- `NEXT_PUBLIC_SUPABASE_URL` = `https://ltpvagdbprwzqtasurez.supabase.co`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = from `apps/web/.env.local`
-- `NEXT_PUBLIC_SITE_URL` = predicted `https://simply-case-web.vercel.app`
-  (confirm against the real assigned domain after first deploy — Vercel
-  sometimes appends a suffix if the name collides)
+**Cause (confirmed by hitting the Resend API directly):**
+> "You can only send testing emails to your own email address
+> (mannmankirat@gmail.com). To send emails to other recipients, please
+> verify a domain at resend.com/domains, and change the `from` address."
 
-**Immediately after deploy succeeds, do this before testing auth on the
-live site:** Supabase dashboard → Authentication → URL Configuration →
-Redirect URLs is currently **empty**. Add the real Vercel domain there
-(e.g. `https://simply-case-web.vercel.app/**`), or magic-link/password
-auth will fail on the deployed site the exact same way it failed locally
-before `NEXT_PUBLIC_SITE_URL` was wired up correctly.
+This is NOT a code, template, Supabase, or Vercel problem — the app is
+working correctly. It is purely the Resend test-sender restriction while
+using `onboarding@resend.dev` with no verified domain.
+
+An earlier diagnosis in this project wrongly concluded the hosted "Confirm
+signup" email template was broken. It was not — the template was replaced
+with a custom one (`supabase/templates/confirmation.html`, declared in
+config.toml) and the failure persisted identically, which is what exposed
+the real cause. The custom template is fine to keep, it just was not the fix.
+
+**Fix:** buy a domain (~$12/yr) -> add at resend.com/domains -> add the DNS
+records -> change sender from `onboarding@resend.dev` to
+`noreply@yourdomain.com` in BOTH places:
+  1. Supabase dashboard -> Authentication -> SMTP Settings (sender email)
+  2. `NOTIFICATION_FROM_EMAIL` in `.env.local` + `supabase secrets set`
+     (used by the send-notifications Edge Function)
+
+Until that is done: only mannmankirat@gmail.com can receive any email from
+this app. Everyone else silently fails. Hard launch blocker.
+
+## Known state of auth (all verified live)
+
+| Scenario | Result | Why |
+|---|---|---|
+| Magic link -> owner email | works | |
+| Password login, `admin@mycasepro.test` / `admin123` | works | pre-confirmed via admin API |
+| Password login, mannmankirat@gmail.com | fails, `invalid_credentials` | account was created via magic link, so it has NO password set. There is no password-reset UI built yet — that is a genuine missing feature. |
+| Password signup, existing email | fake success, does nothing | Supabase anti-enumeration returns a decoy user with `identities: []` |
+| Password signup, new email | HTTP 500 | the Resend domain restriction above |
 
 ## What's NOT built yet, in likely order
 
-1. **Finish/verify the Vercel deploy** (in progress — see above).
+1. **Verify a Resend domain** — see the blocker section above. Nothing
+   else matters for real users until this is done.
+2. **Password-reset flow** — not built. Any account created via magic link
+   has no password and currently cannot use password login at all, with no
+   in-app way to set one. Needed before password auth is genuinely usable.
 2. **UI design pass.** Both apps are functional but deliberately
    plain/unstyled — this was a conscious choice to prove the pipeline
    first. User has asked about this; agreed to defer it, revisit once
