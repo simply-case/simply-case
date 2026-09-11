@@ -11,10 +11,15 @@ export interface SendMagicLinkState {
 }
 
 /**
- * Sends a magic-link sign-in email. Supabase's own auth email relay is
- * rate-limited to a handful per hour (see docs/PLAN.md "email" decision) —
- * fine for the low volume of login attempts this will see before Resend is
- * wired in for the higher-volume notification channel.
+ * Sends a magic-link sign-in email via Resend (custom SMTP — see
+ * docs/DEPLOY_NOTES.md). Two independent throttles can produce a 429 here,
+ * and the error copy below must not claim a specific cause it can't confirm:
+ *   - a per-address cooldown (auth.email.max_frequency, currently 60s) —
+ *     the one you'll actually hit while testing by resending to yourself
+ *   - the hourly cap across all addresses (auth.rate_limit.email_sent)
+ * Supabase's own error message already distinguishes these ("you can only
+ * request this after N seconds" vs "email rate limit exceeded"), so it's
+ * surfaced directly rather than replaced with a guess.
  */
 export async function sendMagicLink(
   _prev: SendMagicLinkState,
@@ -37,18 +42,13 @@ export async function sendMagicLink(
   });
 
   if (error) {
-    // Surface what actually went wrong. A generic "try again shortly" for
-    // every failure makes the most common one — Supabase's built-in email
-    // relay hitting its few-per-hour cap — indistinguishable from a real
-    // outage, and sends people retrying into the same wall.
-    if (error.code === "over_email_send_rate_limit" || error.status === 429) {
-      return {
-        status: "error",
-        message:
-          "Too many sign-in emails sent recently. Supabase's built-in email is rate-limited to a few per hour — wait a bit, or configure custom SMTP to remove the cap.",
-      };
-    }
     console.error("[sendMagicLink]", error.code ?? error.status, error.message);
+    if (error.code === "over_email_send_rate_limit" || error.status === 429) {
+      // error.message here is Supabase's own text, which already says
+      // whether this is the per-address cooldown or the hourly cap — don't
+      // paper over that distinction with a fixed guess.
+      return { status: "error", message: `Too many requests: ${error.message}` };
+    }
     return {
       status: "error",
       message: `Couldn't send the link: ${error.message}`,
