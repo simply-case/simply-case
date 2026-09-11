@@ -129,3 +129,42 @@ EOIR adapter, CEAC assisted-refresh, timeline export, paid tier if wanted.
 - USCIS API approval status → blocks Phase 2
 - Apple Developer + Google Play accounts ($99/yr + $25) → needed before Phase 4 ships
 - Domain name for Resend sender verification
+
+---
+
+# Product decisions (confirmed 2026-09-11)
+
+## Audience: individuals first, firms later
+
+v1 targets a person tracking 1-5 of their own cases. Firm/attorney support is a
+later phase, not a never.
+
+**This costs us nothing now.** `user_cases` is already a join table between a
+user and a shared `tracked_case`, so an attorney and their client can each
+subscribe to the same case today and each get their own notifications. What a
+firm tier adds later is a roster, team accounts, billing, and permissions —
+all additive. No migration of existing data required.
+
+## Processing-time estimates: deferred, not designed out
+
+Not in v1. But `tracked_cases.form_type` and `tracked_cases.submitted_at` are
+already captured, and those are exactly the join keys a processing-time feature
+needs. So we accumulate the inputs from day one and can light the feature up
+later against historical data we already have, rather than starting cold.
+
+## Notification content: private by default
+
+Lock-screen text must not reveal immigration status. The push payload carries a
+generic title/body; the real status is only visible after opening the app.
+
+**Open subtlety:** the user-chosen nickname could itself be revealing
+("Mom's asylum case") if we put it on the lock screen. Decision: include the
+nickname, but the nickname field in the UI carries a short note that it may
+appear in notifications — the user controls it, but should know that.
+
+## Monetization: free, no limits, for now
+
+No plan/quota columns in the schema. Natural future levers, in order of least
+disruption: number of active cases, check frequency, history depth. Adding a
+tier later means a `plan` column on `profiles` plus enforcement — easy. The
+hard part is social (existing free users), not technical.
