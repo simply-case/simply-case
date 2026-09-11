@@ -1,0 +1,24 @@
+{
+  "name": "mycasepro",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace @mycasepro/web",
+    "build:web": "npm run build --workspace @mycasepro/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:types": "supabase gen types typescript --linked > packages/shared/src/database.types.ts",
+    "db:push": "supabase db push",
+    "db:diff": "supabase db diff -f"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

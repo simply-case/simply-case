@@ -1,0 +1,21 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+.expo/
+.turbo/
+
+# env — never commit
+.env
+.env.*
+!.env.example
+
+# supabase
+supabase/.temp/
+supabase/.branches/
+
+.DS_Store
+*.log
+npm-debug.log*
+.vercel
