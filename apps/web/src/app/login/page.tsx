@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useActionState, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -79,15 +80,22 @@ function PasswordForm() {
         </Suspense>
       )}
 
-      <button
-        type="button"
-        onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-        className="mt-4 text-xs text-neutral-500 hover:text-neutral-800"
-      >
-        {mode === "signin"
-          ? "Need an account? Create one"
-          : "Already have an account? Sign in"}
-      </button>
+      <div className="mt-4 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+          className="text-xs text-neutral-500 hover:text-neutral-800"
+        >
+          {mode === "signin"
+            ? "Need an account? Create one"
+            : "Already have an account? Sign in"}
+        </button>
+        {mode === "signin" && (
+          <Link href="/forgot-password" className="text-xs text-neutral-500 hover:text-neutral-800">
+            Forgot password?
+          </Link>
+        )}
+      </div>
     </>
   );
 }

@@ -50,9 +50,13 @@ export default function AuthConfirmScreen() {
       }
       // AuthProvider's onAuthStateChange listener picks up the new session
       // from setSession() above; Stack.Protected in the root layout then
-      // swaps to the (app) group on its own. This replace just clears
+      // swaps to the (app) group on its own. These replaces just clear
       // auth/confirm off the stack so back-navigation can't return to it.
-      router.replace("/");
+      //
+      // A recovery link signs the user in like any other, so without this
+      // branch they'd land on the dashboard and never be asked for the new
+      // password they came here to set.
+      router.replace(params.type === "recovery" ? "/reset-password" : "/");
     });
   }, [url]);
 

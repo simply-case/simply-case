@@ -2,7 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@mycasepro/shared";
 
-const PUBLIC_PATHS = ["/login", "/auth/confirm"];
+// /reset-password is deliberately NOT public: clicking the recovery link
+// goes through /auth/confirm first, which exchanges the token for a real
+// session — so by the time the user lands on /reset-password they are
+// authenticated, and anyone reaching it without a session should be sent
+// to /login rather than shown a password form that can't work.
+const PUBLIC_PATHS = ["/login", "/auth/confirm", "/forgot-password"];
 
 /**
  * Refreshes the Supabase session cookie on every request and redirects
