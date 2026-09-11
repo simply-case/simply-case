@@ -105,18 +105,30 @@ records -> change sender from `onboarding@resend.dev` to
   2. `NOTIFICATION_FROM_EMAIL` in `.env.local` + `supabase secrets set`
      (used by the send-notifications Edge Function)
 
-Until that is done: only mannmankirat@gmail.com can receive any email from
-this app. Everyone else silently fails. Hard launch blocker.
+**Current workaround (applied):** `auth.email.enable_confirmations` is set
+to FALSE, so signup/login send no email at all and work for any address.
+This is why signup works today without a domain.
+
+**This must be reverted before real users.** With confirmations off, anyone
+can sign up using an email they do not control — and this app emails
+immigration case status to that address. Re-enable confirmations as soon as
+a domain is verified.
+
+Note also that email is still required for: password reset (not built yet)
+and case-change notification emails (built, but can only reach the Resend
+account owner until a domain is verified). If mobile push becomes the
+primary notification channel, the domain matters less for notifications —
+but password reset still needs working email.
 
 ## Known state of auth (all verified live)
 
 | Scenario | Result | Why |
 |---|---|---|
-| Magic link -> owner email | works | |
+| Magic link | REMOVED | password-only now, at user request |
 | Password login, `admin@mycasepro.test` / `admin123` | works | pre-confirmed via admin API |
 | Password login, mannmankirat@gmail.com | fails, `invalid_credentials` | account was created via magic link, so it has NO password set. There is no password-reset UI built yet — that is a genuine missing feature. |
 | Password signup, existing email | fake success, does nothing | Supabase anti-enumeration returns a decoy user with `identities: []` |
-| Password signup, new email | HTTP 500 | the Resend domain restriction above |
+| Password signup, any email | works, instant session | email confirmation is DISABLED (see below) |
 
 ## What's NOT built yet, in likely order
 

@@ -225,7 +225,17 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = true
+#
+# Currently DISABLED so signup works for any email address while Resend is
+# still on its test sender (onboarding@resend.dev), which only delivers to
+# the Resend account owner — with confirmations on, every signup by anyone
+# else fails with "Error sending confirmation email".
+#
+# RE-ENABLE THIS before real users, once a domain is verified at
+# resend.com/domains. Leaving it off means someone can sign up with an email
+# they don't control, and this app emails immigration case status to that
+# address — verifying ownership matters here more than in a typical app.
+enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
