@@ -6,14 +6,21 @@ export const providerSchema = z.enum(PROVIDERS);
 export type Provider = z.infer<typeof providerSchema>;
 
 /**
- * USCIS receipt number: 3-letter service-center code + 10 digits.
- * e.g. IOE0912345678, MSC2190123456
+ * USCIS receipt number. Their OpenAPI spec documents two valid formats:
+ *   [a-zA-Z]{3}[0-9]{10}   e.g. IOE0912345678, MSC2190123456
+ *   [a-zA-Z]{3}\*[0-9]{9}  e.g. EAC*999910340
+ * The asterisk form is easy to overlook; rejecting it here would refuse input
+ * the API itself accepts. Kept in sync with isValidReceiptNumber() in
+ * supabase/functions/_shared/uscis.ts.
  */
 export const uscisReceiptSchema = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z]{3}\d{10}$/, "Receipt numbers are 3 letters followed by 10 digits");
+  .regex(
+    /^[A-Z]{3}(\d{10}|\*\d{9})$/,
+    "Receipt numbers are 3 letters followed by 10 digits (e.g. IOE0912345678)",
+  );
 
 /** EOIR A-Number: 8 or 9 digits, commonly written A123-456-789. */
 export const aNumberSchema = z

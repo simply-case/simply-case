@@ -13,7 +13,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:types": "supabase gen types typescript --linked > packages/shared/src/database.types.ts",
     "db:push": "supabase db push",
-    "db:diff": "supabase db diff -f"
+    "db:diff": "supabase db diff -f",
+    "test": "node --test supabase/functions/_shared/*.test.ts"
   },
   "engines": {
     "node": ">=20"
