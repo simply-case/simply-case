@@ -406,8 +406,35 @@ export type Database = {
       }
     }
     Functions: {
+      add_case: {
+        Args: {
+          p_case_key: string
+          p_nickname?: string
+          p_provider: Database["public"]["Enums"]["case_provider"]
+        }
+        Returns: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          nickname: string | null
+          notify_email: boolean
+          notify_push: boolean
+          tracked_case_id: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_cases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_due_cases: {
-        Args: { batch_size?: number }
+        Args: {
+          batch_size?: number
+          p_provider: Database["public"]["Enums"]["case_provider"]
+        }
         Returns: {
           body_hash: string | null
           case_key: string
@@ -435,6 +462,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      increment_case_errors: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_tracked_case_id: string
+        }
+        Returns: undefined
+      }
+      reschedule_case_soon: {
+        Args: { p_delay_seconds?: number; p_tracked_case_id: string }
+        Returns: undefined
       }
     }
     Enums: {

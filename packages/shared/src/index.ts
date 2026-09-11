@@ -1,2 +1,2 @@
-export * from "./providers.js";
-export * from "./database.types.js";
+export * from "./providers";
+export * from "./database.types";
