@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Link } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
 export default function SignInScreen() {
@@ -93,6 +94,14 @@ function PasswordForm() {
           {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
         </Text>
       </Pressable>
+
+      {mode === "signin" && (
+        <Link href="/forgot-password" asChild>
+          <Pressable>
+            <Text style={styles.switchMode}>Forgot password?</Text>
+          </Pressable>
+        </Link>
+      )}
     </>
   );
 }

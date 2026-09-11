@@ -41,11 +41,19 @@ function RootNavigator() {
 
       <Stack.Protected guard={!session}>
         <Stack.Screen name="sign-in" options={{ title: "mycase pro" }} />
+        <Stack.Screen name="forgot-password" options={{ title: "Reset password" }} />
       </Stack.Protected>
 
       {/* Reachable regardless of session state — it's what CREATES the
-          session from an incoming magic-link deep link. */}
-      <Stack.Screen name="auth/confirm" options={{ title: "Signing in…" }} />
+          session from an incoming recovery deep link. */}
+      <Stack.Screen name="auth/confirm" options={{ title: "Opening…" }} />
+
+      {/* Guarded by session, not by !session: following a recovery link
+          signs the user in first, so they arrive here already
+          authenticated and just need to choose a new password. */}
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="reset-password" options={{ title: "New password" }} />
+      </Stack.Protected>
     </Stack>
   );
 }
