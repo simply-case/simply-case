@@ -37,7 +37,22 @@ export async function sendMagicLink(
   });
 
   if (error) {
-    return { status: "error", message: "Couldn't send the link. Try again shortly." };
+    // Surface what actually went wrong. A generic "try again shortly" for
+    // every failure makes the most common one — Supabase's built-in email
+    // relay hitting its few-per-hour cap — indistinguishable from a real
+    // outage, and sends people retrying into the same wall.
+    if (error.code === "over_email_send_rate_limit" || error.status === 429) {
+      return {
+        status: "error",
+        message:
+          "Too many sign-in emails sent recently. Supabase's built-in email is rate-limited to a few per hour — wait a bit, or configure custom SMTP to remove the cap.",
+      };
+    }
+    console.error("[sendMagicLink]", error.code ?? error.status, error.message);
+    return {
+      status: "error",
+      message: `Couldn't send the link: ${error.message}`,
+    };
   }
   return { status: "sent", message: `Check ${parsed.data} for a sign-in link.` };
 }
