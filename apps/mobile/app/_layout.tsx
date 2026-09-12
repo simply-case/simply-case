@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme";
 
 export default function RootLayout() {
   return (
@@ -23,18 +24,29 @@ export default function RootLayout() {
  * not what earlier training data would suggest.
  */
 function RootNavigator() {
+  const { colors } = useTheme();
   const { session, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
+  // Applied once here rather than per-screen: every Stack.Screen below
+  // inherits it, so a new screen added later is themed by default instead
+  // of needing its own header options to avoid looking like an outlier.
+  const screenOptions = {
+    headerStyle: { backgroundColor: colors.surface },
+    headerTintColor: colors.text,
+    headerShadowVisible: false,
+    contentStyle: { backgroundColor: colors.bg },
+  };
+
   return (
-    <Stack>
+    <Stack screenOptions={screenOptions}>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(app)" options={{ headerShown: false }} />
       </Stack.Protected>

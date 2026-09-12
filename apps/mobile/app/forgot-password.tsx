@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { makeRedirectUri } from "expo-auth-session";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/theme";
+import { Button, Input } from "@/components/ui";
 
 /**
  * Resolves to exp://…/--/auth/confirm in Expo Go, or mycasepro://auth/confirm
@@ -12,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 const redirectTo = makeRedirectUri({ path: "/auth/confirm" });
 
 export default function ForgotPasswordScreen() {
+  const { colors, spacing, fontSize } = useTheme();
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
@@ -38,51 +41,55 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Reset your password</Text>
-      <Text style={styles.subtitle}>We&apos;ll email you a link to set a new one.</Text>
-
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        placeholder="you@example.com"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.input}
-      />
-      <Pressable
-        onPress={handleSend}
-        disabled={sending || email.length === 0}
-        style={[styles.button, (sending || email.length === 0) && styles.buttonDisabled]}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
+        keyboardShouldPersistTaps="handled"
       >
-        {sending ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Send reset link</Text>
-        )}
-      </Pressable>
+        <Text style={{ fontSize: fontSize.lg, fontWeight: "700", color: colors.text }}>
+          Reset your password
+        </Text>
+        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
+          We&apos;ll email you a link to set a new one.
+        </Text>
 
-      {message && (
-        <Text style={[styles.message, message.isError && styles.messageError]}>{message.text}</Text>
-      )}
+        <View style={{ gap: spacing.md }}>
+          <Input
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            onSubmitEditing={email.length > 0 ? handleSend : undefined}
+          />
+          <Button label="Send reset link" onPress={handleSend} loading={sending} disabled={email.length === 0} />
 
-      <Pressable onPress={() => router.back()}>
-        <Text style={styles.back}>← Back to sign in</Text>
-      </Pressable>
-    </View>
+          {message && (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{ fontSize: fontSize.sm, color: message.isError ? colors.danger : colors.accent, textAlign: "center" }}
+            >
+              {message.text}
+            </Text>
+          )}
+
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            hitSlop={12}
+            style={{ marginTop: spacing.md }}
+          >
+            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center" }}>
+              ← Back to sign in
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#fff" },
-  title: { fontSize: 20, fontWeight: "700" },
-  subtitle: { fontSize: 14, color: "#666", marginTop: 4, marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: "#d4d4d4", borderRadius: 6, padding: 12, fontSize: 14, marginBottom: 10 },
-  button: { backgroundColor: "#171717", borderRadius: 6, padding: 14, alignItems: "center" },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
-  message: { fontSize: 13, color: "#15803d", marginTop: 16 },
-  messageError: { color: "#dc2626" },
-  back: { fontSize: 12, color: "#666", marginTop: 18, textAlign: "center" },
-});
