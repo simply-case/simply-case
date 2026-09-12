@@ -33,6 +33,11 @@ federal agency. It runs in the background across everything else.
 
 External clock. Nothing else depends on it, so it must not wait.
 
+**Status 2026-09-12:** not yet eligible — still accumulating the 5
+consecutive days of sandbox traffic. A3's cron query is fixed and was run
+(92 runs, all 'succeeded'), but A4 is unresolved, so no days should be
+counted as credited yet.
+
 - [ ] **A1.** Verify the current production-access requirements on the USCIS
       developer portal. The "5 consecutive days of sandbox traffic" rule is
       what this project recorded earlier — confirm it is still accurate
@@ -89,14 +94,14 @@ External clock. Nothing else depends on it, so it must not wait.
 
 Six items. Only B1 and B2 are new code; the rest is recorded cleanup.
 
-- [ ] **B1. `poll_runs` observability table.** New migration. One row per
+- [x] **B1. `poll_runs` observability table.** New migration. One row per
       `check-cases` invocation: started_at, finished_at, cases_claimed,
       cases_changed, errors, outcome. Today "is polling healthy?" can only
       be answered by forensics across `cron.job_run_details` and
       `tracked_cases.last_checked_at`. This is also the evidence to show
       USCIS. ⚠️ Migration against the shared production DB — additive only,
       but flag before pushing.
-- [ ] **B2. Drain the stale push queue.** `user_cases.notify_push` defaults
+- [x] **B2. Drain the stale push queue.** `user_cases.notify_push` defaults
       `true` and `check-cases` enqueues `channel='push'` rows, but
       `send-notifications` filters `.eq("channel","email")`. Every status
       change since Phase 6 left a permanently-pending push row — they would
@@ -113,7 +118,9 @@ Six items. Only B1 and B2 are new code; the rest is recorded cleanup.
       key, USCIS client secret. All three were printed to chat transcripts
       (never to git) and are still live. Procedure and post-rotation steps
       are in HANDOFF.md. Run `bash scripts/check-env.sh` after.
-- [ ] **B5. Dependabot** — 2 moderate vulnerabilities open on `main`.
+- [ ] **B5. Dependabot** — config added (`.github/dependabot.yml`), but the
+      2 moderate vulnerabilities are still open on `main` and 7 Dependabot
+      PRs await triage (see HANDOFF.md item 10).
 - [ ] **B6. Delete `admin@mycasepro.test`** — password `admin123`, on the
       production database. Note: this is currently the only account with a
       working password login, so do this only after confirming the owner
@@ -131,21 +138,22 @@ an immigration case. That is the brief. It argues for generous spacing,
 quiet color, no alarm-red for ordinary states, honest empty and loading
 states, and never making a pending status *look* like bad news.
 
-- [ ] **C1. Design tokens first.** Color, type scale, spacing, radii, shadow
+- [x] **C1. Design tokens first.** Color, type scale, spacing, radii, shadow
       — defined once. Put them where web can consume them later
       (`packages/shared`), even though only mobile reads them in this phase.
       Doing this before screens is what prevents Phase D from becoming a
       rewrite.
-- [ ] **C2. Core primitives** — Button, Input, Card, Badge/StatusPill,
+- [x] **C2. Core primitives** — Button, Input, Card, Badge/StatusPill,
       ListRow. Hand-rolled against the tokens.
-- [ ] **C3. Status design.** The single most important visual decision in
+- [x] **C3. Status design.** The single most important visual decision in
       the app: how a case status reads at a glance. Needs a defined visual
       treatment per status class (pending / progress / action-needed /
       approved / denied) that is legible without relying on color alone.
-- [ ] **C4. Screen pass**, in order: case list → case detail + timeline →
+- [x] **C4. Screen pass**, in order: case list → case detail + timeline →
       add case → sign-in/sign-up → forgot/reset password → settings.
 - [ ] **C5. States.** Empty, loading (skeletons, not spinners), error,
-      offline. Currently the weakest part of both apps.
+      offline. Empty/loading/error done; **offline handling does not exist
+      in either app yet** (checked 2026-09-12).
 - [ ] **C6. Deep-link click-test on a real device.** Flagged in HANDOFF.md
       as never fully verified. Use `npx expo start --go --tunnel` — plain
       `--go` binds localhost, which a phone cannot reach.
@@ -157,9 +165,9 @@ states, and never making a pending status *look* like bad news.
 Port the Phase C design language. Web is the secondary surface, but it is
 the one that is publicly deployed, so it should not look abandoned.
 
-- [ ] **D1.** Consume the same tokens from `packages/shared`.
-- [ ] **D2.** Screen pass matching C4.
-- [ ] **D3.** Responsive + accessibility pass: real focus states, keyboard
+- [x] **D1.** Consume the same tokens from `packages/shared`.
+- [x] **D2.** Screen pass matching C4.
+- [x] **D3.** Responsive + accessibility pass: real focus states, keyboard
       navigation, contrast, `prefers-reduced-motion`.
 
 ---
@@ -258,10 +266,9 @@ CEAC/NVC, and processing-time estimates.
 
 ## Standing rules (from HANDOFF.md — they still apply)
 
-1. **Never `git push` without asking.** Local commits are free; pushing is
-   the gated step.
-2. **Feature branch per feature → PR → `main`.** Suggested branches here:
-   `feature/poll-observability`, `feature/mobile-ui`, `feature/web-ui`.
+1. **Ask before `git commit` AND `git push`.** Both are gated (corrected
+   2026-09-12). Explain every commit in plain language afterwards.
+2. **Feature branch per feature → PR → `main`.**
 3. **Flag every `supabase db push` / `config push` before running it.** One
    shared Supabase project — git branches do not isolate the database.
 4. **Never print secret values.** Not even indirectly (`${VAR:-default}`,
