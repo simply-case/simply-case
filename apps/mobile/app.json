@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "mycase pro",
+    "name": "Simply Case",
     "slug": "mycasepro",
     "scheme": "mycasepro",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
     "experiments": {
       "typedRoutes": true
@@ -31,7 +31,19 @@
       "expo-router",
       "expo-status-bar",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 260,
+          "resizeMode": "contain",
+          "backgroundColor": "#F5F7FA",
+          "dark": {
+            "backgroundColor": "#F5F7FA"
+          }
+        }
+      ]
     ]
   }
 }

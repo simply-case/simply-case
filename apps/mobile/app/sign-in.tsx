@@ -17,7 +17,7 @@ export default function SignInScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>mycase pro</Text>
+        <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>Simply Case</Text>
         <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
           Track your immigration case status.
         </Text>
@@ -33,10 +33,18 @@ export default function SignInScreen() {
  * AuthProvider's onAuthStateChange listener (lib/auth-context.tsx) picks it
  * up and Stack.Protected in the root layout swaps screens on its own — no
  * manual navigation needed here.
+ *
+ * Defaults to "signup": this is a new user's very first screen, and
+ * "create an account" is a more honest first ask than "sign in" for
+ * someone who doesn't have one yet.
+ *
+ * Apple/Google sign-in are planned but NOT implemented — deliberately not
+ * stubbing disabled buttons for them here, since a dead button reads as
+ * broken rather than "coming soon". Tracked in docs/ROADMAP.md.
  */
 function PasswordForm() {
   const { colors, spacing, fontSize } = useTheme();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);

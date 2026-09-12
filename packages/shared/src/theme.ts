@@ -3,38 +3,47 @@
  * (StyleSheet values). One source of truth so a color/spacing change
  * doesn't have to be made twice and can't silently drift between platforms.
  *
- * Design intent: this app is opened by someone anxious about an immigration
- * case. That's the brief behind every choice here — quiet color, no
- * alarm-red for ordinary states, generous spacing over density. A pending
- * status should never *look* like bad news.
+ * Design direction: "crisp & official" (revised 2026-09-11, replacing an
+ * earlier warm/editorial palette) — cooler neutrals, sharper radii, an
+ * institutional navy accent sampled directly from the Simply Case logo
+ * (apps/mobile/assets/icon.PNG, sampled #0C3D81), tighter spacing. Fits a
+ * legal/government-adjacent product and signals accuracy over warmth.
+ *
+ * That said, the ORIGINAL brief still governs every choice: this app is
+ * opened by someone anxious about an immigration case. "Crisp" must not
+ * slide into "cold" or "alarming" — no alarm-red for ordinary states, and
+ * a pending status should never *look* like bad news. Official can still
+ * be reassuring (see: Mercury, well-run government portals) — that
+ * tension is the thing to keep checking against, not resolve once and
+ * forget.
  */
 
 export const colors = {
   light: {
-    bg: "#FAFAF9",
+    bg: "#F5F7FA",
     surface: "#FFFFFF",
-    surfaceMuted: "#F3F2F0",
-    border: "#E7E5E2",
-    borderStrong: "#D6D3CE",
-    text: "#1C1B1A",
-    textMuted: "#6B6863",
-    textFaint: "#9B9792",
-    accent: "#2F5D50", // deep, quiet green — not corporate blue, not alarm-anything
+    surfaceMuted: "#EEF1F5",
+    border: "#DCE1E8",
+    borderStrong: "#C3CBD6",
+    text: "#111827",
+    textMuted: "#5B6472",
+    textFaint: "#8A93A3",
+    accent: "#0C3D81", // brand navy, sampled from the logo — not a generic blue
     accentText: "#FFFFFF",
     danger: "#B3492F", // muted terracotta, not saturated red — reserved for real errors
     dangerBg: "#FBEEEA",
   },
   dark: {
-    bg: "#15140F",
-    surface: "#1E1D18",
-    surfaceMuted: "#26241E",
-    border: "#33312A",
-    borderStrong: "#403D34",
-    text: "#F2F0EC",
-    textMuted: "#B0ABA2",
-    textFaint: "#78746C",
-    accent: "#7FB0A0",
-    accentText: "#0F1A16",
+    bg: "#0B0F16",
+    surface: "#141A24",
+    surfaceMuted: "#1C2330",
+    border: "#2A3242",
+    borderStrong: "#3B4457",
+    text: "#EDEFF3",
+    textMuted: "#9AA4B5",
+    textFaint: "#6B7484",
+    accent: "#6FA0E0", // lightened brand navy — #0C3D81 reads too dark on a dark ground
+    accentText: "#08172E",
     danger: "#E08A70",
     dangerBg: "#2E1E17",
   },
@@ -92,11 +101,14 @@ export const spacing = {
   xxxl: 48,
 } as const;
 
+// Sharper than the original pass (was 6/10/14/20) — part of the "crisp &
+// official" direction. Structure now comes mostly from borders and
+// dividers rather than soft rounding.
 export const radii = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 20,
+  sm: 4,
+  md: 8,
+  lg: 10,
+  xl: 14,
   full: 999,
 } as const;
 
@@ -116,10 +128,11 @@ export const fontSize = {
 } as const;
 
 export const shadow = {
-  // Single soft elevation used app-wide — this is a calm, flat product, not
-  // one that reaches for depth to signal importance.
+  // Tightened for "crisp & official" — mostly flat, structure comes from
+  // the border color instead of elevation. Shadow is now a subtle hint,
+  // not the thing separating a card from the page.
   card: {
-    light: { shadowColor: "#1C1B1A", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-    dark: { shadowColor: "#000000", shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+    light: { shadowColor: "#111827", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 } },
+    dark: { shadowColor: "#000000", shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 1 } },
   },
 } as const;

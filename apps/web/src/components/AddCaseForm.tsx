@@ -39,7 +39,16 @@ export function AddCaseForm() {
           </div>
         </div>
 
-        <Input name="nickname" placeholder="Nickname (optional) — shown in notifications" aria-label="Nickname" />
+        {/* autoCapitalize="off": mobile browser keyboards otherwise
+            capitalize the first letter automatically — matches the same
+            fix on the mobile app's nickname field. Desktop is unaffected;
+            this is a mobile-keyboard-only behavior. */}
+        <Input
+          name="nickname"
+          placeholder="Nickname (optional) — shown in notifications"
+          aria-label="Nickname"
+          autoCapitalize="off"
+        />
 
         <Button type="submit" disabled={pending} className="w-full">
           {pending ? "Adding…" : "Add case"}
