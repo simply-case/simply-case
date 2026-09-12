@@ -104,7 +104,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-full flex-1 items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm">
-        <h1 className="text-xl font-semibold text-[var(--color-text)]">mycase pro</h1>
+        <h1 className="text-xl font-semibold text-[var(--color-text)]">Simply Case</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           Track your immigration case status.
         </p>

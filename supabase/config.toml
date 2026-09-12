@@ -262,14 +262,14 @@ port = 587
 user = "resend"
 pass = "env(RESEND_API_KEY)"
 admin_email = "onboarding@resend.dev"
-sender_name = "mycase pro"
+sender_name = "Simply Case"
 
 # The hosted default "Confirm signup" template was failing to render/send
 # (every brand-new password signup returned HTTP 500 "Error sending
 # confirmation email", while magic-link sends to existing users worked
 # fine). Overriding it with our own known-good template fixes new signups.
 [auth.email.template.confirmation]
-subject = "Confirm your mycase pro email"
+subject = "Confirm your Simply Case email"
 content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize email template

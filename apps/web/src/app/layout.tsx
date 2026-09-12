@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "mycase pro",
+  title: "Simply Case",
   description: "Track USCIS, EOIR, and CEAC case status changes.",
 };
 

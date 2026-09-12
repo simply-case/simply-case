@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-[var(--color-text)]">mycase pro</h1>
+        <h1 className="text-xl font-semibold text-[var(--color-text)]">Simply Case</h1>
         <form action={signOut}>
           <button
             type="submit"

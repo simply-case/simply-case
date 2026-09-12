@@ -1,13 +1,13 @@
-# mycase pro / Simply Case — handoff
+# Simply Case — handoff
 
 Paste this into a new chat to continue. Rewritten 2026-09-12 — the
 previous version (still visible in git history) was from 2026-09-11 and
 had drifted badly: it still listed password-reset as unbuilt, described
 both apps as "deliberately plain/unstyled," and predates the app being
 renamed. Cross-reference `docs/ROADMAP.md` (the phased plan + progress
-log this rewrite is based on) and, if it still exists, `handoff.md` at
-the repo root (a denser, single-session technical snapshot from the
-mobile-rebrand work — this file is the evergreen one, that one is not).
+log this rewrite is based on). A root-level `handoff.md` single-session
+snapshot used to exist; it was deleted 2026-09-12 — this is the only
+handoff doc.
 
 ## ⚠️ How the user wants you to work — standing instructions
 
@@ -50,15 +50,27 @@ times, NVC tracking, news, range search) — see "New scope" below.
 - **Phased plan + progress log:** `docs/ROADMAP.md` — read this for the
   *current* sequencing and a log of what was deployed when.
 
-### ⚠️ Naming is currently split — needs a decision
+### Naming: "Simply Case" everywhere users can see it (resolved 2026-09-12)
 
-The **mobile app** was rebranded to **"Simply Case"** (real logo, app
-icon, splash screen — see below), but that work is on an unmerged branch
-(`feature/mobile-branding`). The **web app** still says **"mycase pro"**
-in three places (`apps/web/src/app/layout.tsx` title,
-`apps/web/src/app/page.tsx` and `login/page.tsx` headings). Pick one name
-and apply it everywhere — right now a user bouncing between web and
-mobile would see two different product names.
+Every user-visible string is now **Simply Case**: mobile app name/icon/
+splash, web page title and headings, notification email subjects, the Auth
+SMTP sender name, and the signup confirmation template.
+
+**Deliberately left as `mycasepro`** (internal, never shown to users, and
+expensive to change): the `@mycasepro/*` npm workspace scope, the Expo
+slug, the `mycasepro://` URL scheme and `pro.mycase.app` bundle ID (both
+tied to the Supabase redirect allowlist and the future store listing),
+`supabase/config.toml` `project_id`, and the local folder name.
+
+**Two renamed strings only take effect after a production step:**
+- `send-notifications` email subject → redeploy that function.
+- `sender_name` + confirmation template in `config.toml` → a
+  `supabase config push`. Bundle it into the Phase E config push (flag
+  first, `config diff` first). The Supabase dashboard SMTP sender name
+  can also be changed by hand in the meantime.
+- The `NOTIFICATION_FROM_EMAIL` **secret** (not just `.env.example`) still
+  carries the old display name until reset — do that with the Phase E
+  sender change.
 
 ## Stack
 
@@ -128,7 +140,7 @@ Vercel · npm workspaces monorepo.
     reads the Supabase secret key by design.
 
 ### Mobile app
-11. **4-tab navigation** (on `feature/mobile-branding`, unmerged): Cases
+11. **4-tab navigation** (merged): Cases
     (own nested stack, list → detail) · News (explicitly placeholder
     sample content, no real source picked yet) · More (open slot,
     "coming soon") · Profile (email, a real quiet-hours editor wired to
@@ -136,7 +148,7 @@ Vercel · npm workspaces monorepo.
 12. **Sign-up shown first**, not sign-in — a new user's actual first
     screen is "Create account." Apple/Google sign-in noted as planned in
     a code comment, deliberately not stubbed as dead buttons.
-13. **Real branding** (same branch): app renamed "Simply Case," real app
+13. **Real branding** (merged): app renamed "Simply Case," real app
     icon and splash screen generated from the user's supplied logo files,
     a shared `AppHeader` component (wordmark, top-left) on all 4 tab
     roots. Bundle ID/scheme (`pro.mycase.app` / `mycasepro://`) left
@@ -193,14 +205,15 @@ real dev build** and will be blocked until the folder is renamed (to
 `personal-projects`, no space) or the project moved. User's call — other
 projects share that Documents folder.
 
-### 3. `feature/mobile-branding` is pushed but not merged
+### 3. USCIS production access — waiting on the sandbox-traffic clock
 
-Contains everything in items 11–15 above. Safe to merge whenever — full
-typecheck + 48/48 tests pass. Merging *does* trigger a Vercel deploy of
-the web app (a small nickname-capitalization fix touches one web file;
-Vercel rebuilds on every push to `main` regardless of which files
-changed) but changes nothing visible on mobile, since nothing has been
-built/submitted anywhere mobile runs yet.
+Not a code blocker, a calendar one. USCIS requires **5 consecutive days of
+active sandbox API traffic** before production access can be requested
+(developersupport@uscis.dhs.gov). Confirmed with the user 2026-09-12: not
+yet eligible. The polling cron is what generates the traffic, so the job
+is to keep it healthy and verify it's actually being credited — see
+ROADMAP Phase A, especially A4 (a closed sandbox returns 503, which our
+side treats as healthy but USCIS won't count).
 
 ## Known state of auth (verified live)
 
@@ -210,7 +223,7 @@ built/submitted anywhere mobile runs yet.
 | Password login | ✅ works |
 | Forgot password → reset | ✅ works end to end, both web and mobile |
 | Magic link | ❌ removed at user's request |
-| Password login as mannmankirat@gmail.com | Previously had no password (magic-link-only account) — forgot-password now provides a path to set one |
+| Password login as mannmankirat@gmail.com | **No password set yet** (confirmed 2026-09-12) — was a magic-link-only account; forgot-password is the path to set one |
 
 Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
 `admin@mycasepro.test` (disposable test account, password `admin123` —
@@ -218,13 +231,13 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
 
 ## What's NOT built / not done, in suggested order
 
-1. **Merge `feature/mobile-branding`** — see blocker #3 above.
-2. **Resolve the naming split** — "mycase pro" (web) vs "Simply Case"
-   (mobile branch). Pick one, apply everywhere.
+1. ~~**Merge `feature/mobile-branding`**~~ — **done**, PR #13, 2026-09-12.
+2. ~~**Resolve the naming split**~~ — **done** 2026-09-12, "Simply Case"
+   everywhere visible. A couple of strings need a deploy/config push to go
+   live — see "Naming" near the top.
 3. **Rotate 3 credentials** — Supabase secret key, Resend API key, USCIS
    client secret. All were printed to chat transcripts earlier in this
-   project (never to git). Status since last rotation is unclear — treat
-   as still outstanding unless you have a specific record of doing it.
+   project (never to git). **Confirmed NOT yet rotated as of 2026-09-12.**
    Run `bash scripts/check-env.sh` after.
 4. **Delete `admin@mycasepro.test`** — only after confirming the owner
    account can sign in via forgot-password (it's currently the only
@@ -246,7 +259,9 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
    below.
 9. **Android** — no Android SDK installed on this machine. Nothing has
    been visually verified on Android, only iOS Simulator.
-10. **Review the 7 open Dependabot PRs** — do NOT bulk-merge.
+10. **Review the 7 open Dependabot PRs** — do NOT bulk-merge. GitHub
+    also still reports 2 moderate vulnerabilities on `main` (as of
+    2026-09-12); check whether the grouped minor-patch PR clears them.
     - Close the `react-native-async-storage` one — Expo SDK 57 pins that
       package to 2.x; the proposed 3.x would break the mobile app.
     - The `npm-minor-patch` grouped PR is safe to merge.
@@ -259,9 +274,9 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
     flow, both immigrant and nonimmigrant, see the new scope section
     below.
 12. **USCIS production access** — sandbox only. Needs 5 consecutive days
-    of sandbox traffic then emailing developersupport@uscis.dhs.gov.
-    **User has explicitly deprioritized this for now** — don't chase it
-    unprompted.
+    of sandbox traffic, then emailing developersupport@uscis.dhs.gov.
+    **Not yet eligible (2026-09-12)** — see blocker #3. Passive: keep the
+    cron healthy and verify traffic per ROADMAP Phase A; nothing to build.
 13. **App Store / Play Store submission** — needs #6, #7's dev accounts,
     plus real screenshots/listing copy (icons are done, see item 13
     above under mobile app).
@@ -556,6 +571,9 @@ Mon–Fri 7AM–8PM EST; a 503 outside that window is expected.
 - **macOS's default filesystem is case-insensitive.** Dragging in a file
   named `icon.PNG` silently overwrote an existing `icon.png` — same file,
   different case, one inode. Worth knowing before naming future assets.
+- **Compare branches against `origin/main`, not local `main`.** Merges
+  happen on GitHub; an un-fetched local `main` makes merged branches look
+  unmerged. `git fetch --prune` first.
 - **Verify against reality, not assumption.** A live cron "succeeded"
   status only means pg_cron queued the HTTP request, not that the
   function did anything useful — this is exactly why `poll_runs` exists.
