@@ -16,7 +16,7 @@ const credentialsSchema = z.object({
 });
 
 export interface PasswordAuthState {
-  status: "idle" | "error";
+  status: "idle" | "error" | "info";
   message?: string;
 }
 
@@ -82,8 +82,10 @@ export async function signUpWithPassword(
   // data.session is null and the user must click the confirmation email —
   // reuses the same Resend pipeline as magic link, already verified working.
   if (data.session) redirect("/");
+  // Genuinely a success message (an account was created), not an error —
+  // previously returned as status "error" here, which rendered it in red.
   return {
-    status: "error",
+    status: "info",
     message: "Account created — check your email to confirm it before signing in.",
   };
 }

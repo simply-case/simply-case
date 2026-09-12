@@ -1,8 +1,42 @@
 @import "tailwindcss";
 
+/*
+ * Mirrors packages/shared/src/theme.ts token-for-token (Tailwind v4's
+ * CSS-first config can't import a .ts file, so these are kept in sync by
+ * hand — if you change one, change the other). Same design intent as
+ * mobile: someone anxious about an immigration case opens this app, so
+ * quiet color, no alarm-red for ordinary states, and a pending status that
+ * never *looks* like bad news.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #FAFAF9;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F3F2F0;
+  --color-border: #E7E5E2;
+  --color-border-strong: #D6D3CE;
+  --color-text: #1C1B1A;
+  --color-text-muted: #6B6863;
+  --color-text-faint: #9B9792;
+  --color-accent: #2F5D50;
+  --color-accent-text: #FFFFFF;
+  --color-danger: #B3492F;
+  --color-danger-bg: #FBEEEA;
+
+  --status-pending-fg: #8A6D3B;
+  --status-pending-bg: #F7F0E3;
+  --status-inprogress-fg: #2F5D50;
+  --status-inprogress-bg: #EAF1EE;
+  --status-actionneeded-fg: #8A4B2F;
+  --status-actionneeded-bg: #F7EDE4;
+  --status-approved-fg: #3D6B3F;
+  --status-approved-bg: #EBF3EB;
+  --status-denied-fg: #8A3B3B;
+  --status-denied-bg: #F7E9E9;
+  --status-unknown-fg: #6B6863;
+  --status-unknown-bg: #F3F2F0;
+
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
 }
 
 @theme inline {
@@ -14,8 +48,34 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-bg: #15140F;
+    --color-surface: #1E1D18;
+    --color-surface-muted: #26241E;
+    --color-border: #33312A;
+    --color-border-strong: #403D34;
+    --color-text: #F2F0EC;
+    --color-text-muted: #B0ABA2;
+    --color-text-faint: #78746C;
+    --color-accent: #7FB0A0;
+    --color-accent-text: #0F1A16;
+    --color-danger: #E08A70;
+    --color-danger-bg: #2E1E17;
+
+    --status-pending-fg: #D9B876;
+    --status-pending-bg: #2E2717;
+    --status-inprogress-fg: #7FB0A0;
+    --status-inprogress-bg: #1B2621;
+    --status-actionneeded-fg: #E0A17A;
+    --status-actionneeded-bg: #2E2117;
+    --status-approved-fg: #8FC492;
+    --status-approved-bg: #1C2A1D;
+    --status-denied-fg: #D98F8F;
+    --status-denied-bg: #2E1B1B;
+    --status-unknown-fg: #B0ABA2;
+    --status-unknown-bg: #26241E;
+
+    --background: var(--color-bg);
+    --foreground: var(--color-text);
   }
 }
 
@@ -23,4 +83,15 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Respect reduced-motion system preference app-wide, per docs/ROADMAP.md
+   Phase D3, rather than relying on every component to opt in individually. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
