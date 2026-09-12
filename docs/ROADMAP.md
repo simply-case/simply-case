@@ -230,3 +230,54 @@ Done in `feature/backend-hardening`, not yet pushed:
   (Supabase, Resend, USCIS) — can't be done from the repo.
 - B6 (delete `admin@mycasepro.test`): a live-database delete against the
   shared production project — flagging rather than doing unasked.
+
+---
+
+## Phase B deployment log (2026-09-12)
+
+Deployed to production:
+- `check-cases` Edge Function, with `--no-verify-jwt --use-api`. The
+  **`--no-verify-jwt` flag is mandatory** — the cron authenticates with an
+  `x-cron-secret` header, not a JWT, so deploying without it makes every
+  cron invocation 401 and polling stops silently. (The function header
+  points at "docs/PLAN.md deploy notes" for this; those notes do not
+  exist. This is now the record.)
+- Migrations 0009 + 0010 via `supabase db push`. Verified with
+  `supabase migration list`: 0001-0010 all present locally and remotely,
+  no drift.
+
+### Correction: there was no stale push backlog
+
+Migration 0010 and its commit message claimed every status change since
+Phase 6 had left a permanently-pending `channel='push'` notification row.
+Checked against the live database after deploying: **the `notifications`
+table is completely empty** — zero rows, any channel, any status.
+
+The reasoning was wrong in a specific way worth recording. A notification
+row is only enqueued when a status *changes* between polls, not on first
+fetch. The three tracked cases have not changed status since they were
+added, so no notification of either channel has ever been created. The
+backlog was theoretical.
+
+What this means:
+- 0010's `update` statement was a no-op. Harmless, and the widened status
+  check constraint ('skipped') is still there for when it's needed.
+- The code change in `check-cases` (stop enqueueing push) is still
+  correct and still worth having — it's now genuinely *preventive* rather
+  than corrective.
+- The framing "drained the stale queue" in commit b1cb160 is inaccurate.
+  Nothing was drained because nothing was there.
+
+### Correction: cron.job_run_details has no `jobname` column
+
+`scripts/check-poll-health.sql` query 1 selected
+`job_run_details.jobname`, which fails with "column jobname does not
+exist". The job name lives on `cron.job`; the two must be joined on
+`jobid`. Fixed and verified against the live project (92 runs, all
+'succeeded', most recent 2026-09-12 03:00 UTC).
+
+Worth knowing what that 'succeeded' actually means: pg_cron ran
+`net.http_post` successfully, i.e. the request was *queued*. It says
+nothing about the HTTP status the function returned. A function failing
+on every invocation would still read 'succeeded' here — which is
+precisely the blind spot poll_runs was built to close.

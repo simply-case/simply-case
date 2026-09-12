@@ -13,14 +13,26 @@
 -- 1. Did pg_cron invoke check-cases, and did each invocation succeed at the
 --    HTTP layer? (This only proves the request was made — see query 3 for
 --    whether USCIS actually answered with data.)
+-- NOTE: cron.job_run_details has no `jobname` column — only `jobid`. The
+-- job's name lives on cron.job, so the two must be joined. (An earlier
+-- version of this file queried job_run_details.jobname directly and failed
+-- with "column jobname does not exist"; verified against the live project.)
+--
+-- Also note what this query does NOT prove: `status = 'succeeded'` means
+-- pg_cron successfully executed net.http_post — i.e. the request was
+-- queued. It says nothing about the HTTP response the Edge Function
+-- returned. A function erroring on every invocation still shows
+-- 'succeeded' here. That gap is exactly what poll_runs (query 2) exists
+-- to close.
 select
-  status,
+  d.status,
   count(*) as invocations,
-  min(start_time) as first_seen,
-  max(start_time) as last_seen
-from cron.job_run_details
-where jobname = 'check-cases-uscis'
-group by status
+  min(d.start_time) as first_seen,
+  max(d.start_time) as last_seen
+from cron.job_run_details d
+join cron.job j on j.jobid = d.jobid
+where j.jobname = 'check-cases-uscis'
+group by d.status
 order by 2 desc;
 
 -- 2. Since poll_runs exists (migration 0009), this is the direct answer:
