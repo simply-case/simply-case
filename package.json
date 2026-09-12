@@ -15,7 +15,7 @@
     "db:types": "supabase gen types typescript --linked > packages/shared/src/database.types.ts",
     "db:push": "supabase db push",
     "db:diff": "supabase db diff -f",
-    "test": "node --test supabase/functions/_shared/*.test.ts"
+    "test": "node --test supabase/functions/_shared/*.test.ts packages/shared/src/*.test.ts"
   },
   "engines": {
     "node": ">=20"

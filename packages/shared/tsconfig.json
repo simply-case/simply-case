@@ -1,7 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    // Needed because status.test.ts imports "./status.ts" with the explicit
+    // extension — Node's native TS runner (node --test) requires it for
+    // ESM resolution; tsc otherwise refuses a .ts import specifier. Safe
+    // only because noEmit is set above (this repo's tests never get built).
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts"]
 }

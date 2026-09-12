@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/theme";
+import { Button, Input } from "@/components/ui";
 
 /**
  * Reached after auth/confirm.tsx turns a recovery deep link into a session,
@@ -9,6 +11,7 @@ import { supabase } from "@/lib/supabase";
  * password without needing the old one.
  */
 export default function ResetPasswordScreen() {
+  const { colors, spacing, fontSize } = useTheme();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
@@ -34,51 +37,49 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Set a new password</Text>
-      <Text style={styles.subtitle}>Choose a password you&apos;ll use to sign in from now on.</Text>
-
-      <TextInput
-        value={password}
-        onChangeText={setPassword}
-        placeholder="New password (min. 6 characters)"
-        secureTextEntry
-        autoCapitalize="none"
-        style={styles.input}
-      />
-      <TextInput
-        value={confirm}
-        onChangeText={setConfirm}
-        placeholder="Confirm new password"
-        secureTextEntry
-        autoCapitalize="none"
-        style={styles.input}
-      />
-
-      {tooShort && <Text style={styles.hint}>Password must be at least 6 characters.</Text>}
-      {mismatch && <Text style={styles.hint}>Passwords don&apos;t match.</Text>}
-
-      <Pressable
-        onPress={handleSave}
-        disabled={!canSubmit}
-        style={[styles.button, !canSubmit && styles.buttonDisabled]}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
+        keyboardShouldPersistTaps="handled"
       >
-        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save password</Text>}
-      </Pressable>
+        <Text style={{ fontSize: fontSize.lg, fontWeight: "700", color: colors.text }}>Set a new password</Text>
+        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
+          Choose a password you&apos;ll use to sign in from now on.
+        </Text>
 
-      {error && <Text style={styles.error}>{error}</Text>}
-    </View>
+        <View style={{ gap: spacing.md }}>
+          <Input
+            value={password}
+            onChangeText={setPassword}
+            placeholder="New password (min. 6 characters)"
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            error={tooShort ? "Password must be at least 6 characters." : undefined}
+          />
+          <Input
+            value={confirm}
+            onChangeText={setConfirm}
+            placeholder="Confirm new password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="new-password"
+            error={mismatch ? "Passwords don't match." : undefined}
+            onSubmitEditing={canSubmit ? handleSave : undefined}
+          />
+
+          <Button label="Save password" onPress={handleSave} loading={saving} disabled={!canSubmit} />
+
+          {error && (
+            <Text accessibilityLiveRegion="polite" style={{ fontSize: fontSize.sm, color: colors.danger, textAlign: "center" }}>
+              {error}
+            </Text>
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#fff" },
-  title: { fontSize: 20, fontWeight: "700" },
-  subtitle: { fontSize: 14, color: "#666", marginTop: 4, marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: "#d4d4d4", borderRadius: 6, padding: 12, fontSize: 14, marginBottom: 10 },
-  hint: { fontSize: 12, color: "#a16207", marginBottom: 8 },
-  button: { backgroundColor: "#171717", borderRadius: 6, padding: 14, alignItems: "center", marginTop: 2 },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
-  error: { fontSize: 13, color: "#dc2626", marginTop: 16 },
-});

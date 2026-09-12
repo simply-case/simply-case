@@ -1,15 +1,29 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/theme";
+import { Button, Input } from "@/components/ui";
 
 export default function SignInScreen() {
+  const { colors, spacing, fontSize } = useTheme();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>mycase pro</Text>
-      <Text style={styles.subtitle}>Track your immigration case status.</Text>
-      <PasswordForm />
-    </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>mycase pro</Text>
+        <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
+          Track your immigration case status.
+        </Text>
+        <PasswordForm />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -21,6 +35,7 @@ export default function SignInScreen() {
  * manual navigation needed here.
  */
 function PasswordForm() {
+  const { colors, spacing, fontSize } = useTheme();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,70 +66,59 @@ function PasswordForm() {
     }
   }
 
+  const canSubmit = email.length > 0 && password.length >= 6 && !submitting;
+
   return (
-    <>
-      <TextInput
+    <View style={{ gap: spacing.md }}>
+      <Input
         value={email}
         onChangeText={setEmail}
         placeholder="you@example.com"
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
-        style={styles.input}
+        autoComplete="email"
       />
-      <TextInput
+      <Input
         value={password}
         onChangeText={setPassword}
         placeholder="Password (min. 6 characters)"
         secureTextEntry
         autoCapitalize="none"
-        style={styles.input}
+        autoComplete={mode === "signin" ? "current-password" : "new-password"}
+        onSubmitEditing={canSubmit ? handleSubmit : undefined}
       />
-      <Pressable
+
+      <Button
+        label={mode === "signin" ? "Sign in" : "Create account"}
         onPress={handleSubmit}
-        disabled={submitting || email.length === 0 || password.length < 6}
-        style={[
-          styles.button,
-          (submitting || email.length === 0 || password.length < 6) && styles.buttonDisabled,
-        ]}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>{mode === "signin" ? "Sign in" : "Create account"}</Text>
-        )}
-      </Pressable>
+        loading={submitting}
+        disabled={!canSubmit}
+      />
 
       {message && (
-        <Text style={[styles.message, message.isError && styles.messageError]}>{message.text}</Text>
+        <Text
+          accessibilityLiveRegion="polite"
+          style={{ fontSize: fontSize.sm, color: message.isError ? colors.danger : colors.accent, textAlign: "center" }}
+        >
+          {message.text}
+        </Text>
       )}
 
-      <Pressable onPress={() => setMode(mode === "signin" ? "signup" : "signin")}>
-        <Text style={styles.switchMode}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm }}>
+        <Text
+          onPress={() => setMode(mode === "signin" ? "signup" : "signin")}
+          style={{ fontSize: fontSize.xs, color: colors.textMuted }}
+        >
           {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
         </Text>
-      </Pressable>
 
-      {mode === "signin" && (
-        <Link href="/forgot-password" asChild>
-          <Pressable>
-            <Text style={styles.switchMode}>Forgot password?</Text>
-          </Pressable>
-        </Link>
-      )}
-    </>
+        {mode === "signin" && (
+          <Link href="/forgot-password" style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+            Forgot password?
+          </Link>
+        )}
+      </View>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#fff" },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
-  subtitle: { fontSize: 14, color: "#666", marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: "#d4d4d4", borderRadius: 6, padding: 12, fontSize: 14, marginBottom: 10 },
-  button: { backgroundColor: "#171717", borderRadius: 6, padding: 14, alignItems: "center", marginTop: 2 },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
-  message: { fontSize: 13, color: "#15803d", marginTop: 16 },
-  messageError: { color: "#dc2626" },
-  switchMode: { fontSize: 12, color: "#666", marginTop: 14, textAlign: "center" },
-});

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import type { Database } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/theme";
+import { Card, EmptyState, Skeleton, StatusPill } from "@/components/ui";
 
 type CaseRow = Database["public"]["Views"]["my_case_details"]["Row"];
 type EventRow = Database["public"]["Views"]["my_case_events"]["Row"];
 
 export default function CaseDetailScreen() {
+  const { colors, spacing, fontSize } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [caseDetail, setCaseDetail] = useState<CaseRow | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -41,72 +44,72 @@ export default function CaseDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.lg, gap: spacing.md }}>
+        <Skeleton style={{ height: 22, width: "60%" }} />
+        <Skeleton style={{ height: 12, width: "40%" }} />
+        <Skeleton style={{ height: 90, borderRadius: 14, marginTop: spacing.md }} />
+        <Skeleton style={{ height: 60, borderRadius: 8, marginTop: spacing.lg }} />
+        <Skeleton style={{ height: 60, borderRadius: 8 }} />
       </View>
     );
   }
 
   if (!caseDetail) {
     return (
-      <View style={styles.center}>
-        <Text>Case not found.</Text>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <EmptyState title="Case not found" message="It may have been removed, or the link is out of date." />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{caseDetail.nickname || caseDetail.case_key}</Text>
-      <Text style={styles.meta}>
-        {caseDetail.provider?.toUpperCase()} · {caseDetail.case_key}
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}>
+      <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>
+        {caseDetail.nickname || caseDetail.case_key}
+      </Text>
+      <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs, textTransform: "uppercase" }}>
+        {caseDetail.provider} · {caseDetail.case_key}
         {caseDetail.form_type ? ` · ${caseDetail.form_type}` : ""}
       </Text>
 
-      <View style={styles.statusCard}>
-        <Text style={styles.statusText}>{caseDetail.status_text_en ?? "Pending first check…"}</Text>
+      <Card style={{ marginTop: spacing.lg, gap: spacing.sm }}>
+        <StatusPill statusText={caseDetail.status_text_en} />
+        <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.text, marginTop: spacing.xs }}>
+          {caseDetail.status_text_en ?? "Pending first check…"}
+        </Text>
         {caseDetail.status_detail_en && (
-          <Text style={styles.statusDetail}>{caseDetail.status_detail_en}</Text>
+          <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>{caseDetail.status_detail_en}</Text>
         )}
         {caseDetail.last_checked_at && (
-          <Text style={styles.checkedAt}>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs }}>
             Last checked {new Date(caseDetail.last_checked_at).toLocaleString()}
           </Text>
         )}
-      </View>
+      </Card>
 
-      <Text style={styles.sectionTitle}>History</Text>
+      <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text, marginTop: spacing.xl, marginBottom: spacing.sm }}>
+        History
+      </Text>
       {events.length === 0 ? (
-        <Text style={styles.empty}>No history yet.</Text>
+        <EmptyState title="No history yet" message="This case hasn't been checked yet, or nothing has changed." />
       ) : (
-        events.map((e) => (
-          <View key={e.event_id} style={styles.eventRow}>
-            <Text style={styles.eventDate}>
-              {e.observed_at && new Date(e.observed_at).toLocaleDateString()}
-            </Text>
-            <Text style={styles.eventText}>{e.status_text_en}</Text>
-            {e.status_detail_en && <Text style={styles.eventDetail}>{e.status_detail_en}</Text>}
-          </View>
-        ))
+        <View style={{ gap: spacing.md }}>
+          {events.map((e) => (
+            <View
+              key={e.event_id}
+              style={{ borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.md }}
+            >
+              <Text style={{ fontSize: fontSize.xs, color: colors.textFaint }}>
+                {e.observed_at && new Date(e.observed_at).toLocaleDateString()}
+              </Text>
+              <Text style={{ fontSize: fontSize.base, color: colors.text, marginTop: 2 }}>{e.status_text_en}</Text>
+              {e.status_detail_en && (
+                <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 }}>{e.status_detail_en}</Text>
+              )}
+            </View>
+          ))}
+        </View>
       )}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  content: { padding: 16, paddingBottom: 48 },
-  title: { fontSize: 20, fontWeight: "700" },
-  meta: { fontSize: 11, color: "#888", textTransform: "uppercase", marginTop: 4 },
-  statusCard: { borderWidth: 1, borderColor: "#e5e5e5", borderRadius: 8, padding: 14, marginTop: 16 },
-  statusText: { fontSize: 15, fontWeight: "600" },
-  statusDetail: { fontSize: 13, color: "#555", marginTop: 6 },
-  checkedAt: { fontSize: 11, color: "#999", marginTop: 8 },
-  sectionTitle: { fontSize: 13, fontWeight: "600", marginTop: 24, marginBottom: 8 },
-  empty: { fontSize: 14, color: "#888" },
-  eventRow: { borderLeftWidth: 2, borderLeftColor: "#e5e5e5", paddingLeft: 12, marginBottom: 14 },
-  eventDate: { fontSize: 11, color: "#999" },
-  eventText: { fontSize: 14, color: "#222", marginTop: 2 },
-  eventDetail: { fontSize: 13, color: "#777", marginTop: 2 },
-});

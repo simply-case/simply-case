@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import * as QueryParams from "expo-auth-session/build/QueryParams";
 import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/lib/theme";
 
 /**
  * There is no browser URL bar on native, so this screen exists to do what
@@ -60,26 +61,21 @@ export default function AuthConfirmScreen() {
     });
   }, [url]);
 
+  const { colors, spacing, fontSize } = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md, backgroundColor: colors.bg }}>
       {error ? (
         <>
-          <Text style={styles.errorTitle}>Sign-in failed</Text>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={{ fontSize: fontSize.md, fontWeight: "600", color: colors.text }}>Sign-in failed</Text>
+          <Text style={{ fontSize: fontSize.base, color: colors.danger, textAlign: "center" }}>{error}</Text>
         </>
       ) : (
         <>
-          <ActivityIndicator />
-          <Text style={styles.text}>Signing you in…</Text>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={{ fontSize: fontSize.base, color: colors.textMuted }}>Signing you in…</Text>
         </>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
-  text: { fontSize: 14, color: "#666" },
-  errorTitle: { fontSize: 16, fontWeight: "600" },
-  errorText: { fontSize: 14, color: "#dc2626", textAlign: "center" },
-});

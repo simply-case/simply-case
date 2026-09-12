@@ -1,23 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, FlatList, RefreshControl, Text, View } from "react-native";
 import { router } from "expo-router";
 import { normalizeCaseKey, type Database } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme";
+import { Button, Card, EmptyState, Input, ListRow, StatusPill } from "@/components/ui";
+import { CaseListSkeleton } from "@/components/ui/Skeleton";
 
 type CaseRow = Database["public"]["Views"]["my_case_details"]["Row"];
 
 export default function DashboardScreen() {
+  const { colors, spacing, fontSize } = useTheme();
   const { session, signOut } = useAuth();
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +19,7 @@ export default function DashboardScreen() {
   const [receiptNumber, setReceiptNumber] = useState("");
   const [nickname, setNickname] = useState("");
   const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const loadCases = useCallback(async () => {
     // Reads through my_case_details, never tracked_cases directly — same
@@ -51,10 +46,11 @@ export default function DashboardScreen() {
     try {
       normalized = normalizeCaseKey("uscis", receiptNumber);
     } catch {
-      Alert.alert("Invalid receipt number", "Expected 3 letters followed by 10 digits, e.g. IOE0912345678.");
+      setAddError("Expected 3 letters followed by 10 digits, e.g. IOE0912345678.");
       return;
     }
 
+    setAddError(null);
     setAdding(true);
     // Same add_case() RPC the web app calls (supabase/migrations/0007) —
     // tracked_cases has no insert policy for authenticated users by design,
@@ -67,7 +63,7 @@ export default function DashboardScreen() {
     setAdding(false);
 
     if (error) {
-      Alert.alert("Couldn't add case", error.message);
+      setAddError(error.message);
       return;
     }
     setReceiptNumber("");
@@ -99,8 +95,8 @@ export default function DashboardScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <CaseListSkeleton />
       </View>
     );
   }
@@ -110,66 +106,70 @@ export default function DashboardScreen() {
 
   return (
     <FlatList
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}
       ListHeaderComponent={
         <>
-          <View style={styles.header}>
-            <Text style={styles.email}>{session?.user.email}</Text>
-            <Pressable onPress={signOut}>
-              <Text style={styles.signOut}>Sign out</Text>
-            </Pressable>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg }}>
+            <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>{session?.user.email}</Text>
+            <Text onPress={signOut} style={{ fontSize: fontSize.sm, color: colors.textMuted }}>
+              Sign out
+            </Text>
           </View>
 
-          <View style={styles.form}>
-            <Text style={styles.formTitle}>Add a case (USCIS)</Text>
-            <TextInput
+          <Card style={{ marginBottom: spacing.xl, gap: spacing.sm }}>
+            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text, marginBottom: spacing.xs }}>
+              Add a case (USCIS)
+            </Text>
+            <Input
               value={receiptNumber}
-              onChangeText={setReceiptNumber}
+              onChangeText={(t) => {
+                setReceiptNumber(t);
+                if (addError) setAddError(null);
+              }}
               placeholder="Receipt number, e.g. IOE0912345678"
               autoCapitalize="characters"
               autoCorrect={false}
-              style={styles.input}
+              error={addError ?? undefined}
             />
-            <TextInput
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="Nickname (optional)"
-              style={styles.input}
-            />
-            <Pressable
+            <Input value={nickname} onChangeText={setNickname} placeholder="Nickname (optional)" />
+            <Button
+              label="Add case"
               onPress={handleAddCase}
-              disabled={adding || receiptNumber.length === 0}
-              style={[styles.button, (adding || receiptNumber.length === 0) && styles.buttonDisabled]}
-            >
-              <Text style={styles.buttonText}>{adding ? "Adding…" : "Add case"}</Text>
-            </Pressable>
-          </View>
+              loading={adding}
+              disabled={receiptNumber.length === 0}
+            />
+          </Card>
 
-          <Text style={styles.sectionTitle}>Your cases {active.length > 0 && `(${active.length})`}</Text>
+          {active.length > 0 && (
+            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text, marginBottom: spacing.sm }}>
+              Your cases ({active.length})
+            </Text>
+          )}
         </>
       }
       data={active}
       keyExtractor={(c) => c.user_case_id ?? c.tracked_case_id ?? ""}
-      renderItem={({ item }) => (
-        <CaseCard c={item} onArchive={handleArchive} onRemove={handleRemove} />
-      )}
+      ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+      renderItem={({ item }) => <CaseCard c={item} onArchive={handleArchive} onRemove={handleRemove} />}
       ListEmptyComponent={
-        <Text style={styles.empty}>No cases yet — add one above to start tracking it.</Text>
+        <EmptyState
+          title="No cases yet"
+          message="Add a USCIS receipt number above to start tracking its status."
+        />
       }
       ListFooterComponent={
         archived.length > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Archived ({archived.length})</Text>
-            {archived.map((c) => (
-              <CaseCard
-                key={c.user_case_id}
-                c={c}
-                onArchive={handleArchive}
-                onRemove={handleRemove}
-              />
-            ))}
+            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text, marginTop: spacing.xl, marginBottom: spacing.sm }}>
+              Archived ({archived.length})
+            </Text>
+            <View style={{ gap: spacing.sm }}>
+              {archived.map((c) => (
+                <CaseCard key={c.user_case_id} c={c} onArchive={handleArchive} onRemove={handleRemove} />
+              ))}
+            </View>
           </>
         ) : null
       }
@@ -186,64 +186,34 @@ function CaseCard({
   onArchive: (id: string, archived: boolean) => void;
   onRemove: (id: string) => void;
 }) {
+  const { colors, spacing, fontSize } = useTheme();
   if (!c.user_case_id || !c.tracked_case_id) return null;
   const isArchived = c.archived_at !== null;
 
   return (
-    <Pressable
-      onPress={() => router.push(`/cases/${c.tracked_case_id}`)}
-      style={styles.card}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.cardTitle}>{c.nickname || c.case_key}</Text>
-        <Text style={styles.cardMeta}>
-          {c.provider?.toUpperCase()} · {c.case_key}
-          {c.form_type ? ` · ${c.form_type}` : ""}
-        </Text>
-        <Text style={styles.cardStatus}>
-          {c.status_text_en ?? (c.last_checked_at ? "No status yet" : "Pending first check…")}
-        </Text>
+    <ListRow onPress={() => router.push(`/cases/${c.tracked_case_id}`)} style={isArchived ? { opacity: 0.65 } : undefined}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.md }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: fontSize.md, fontWeight: "600", color: colors.text }}>
+            {c.nickname || c.case_key}
+          </Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: 2, textTransform: "uppercase" }}>
+            {c.provider} · {c.case_key}
+            {c.form_type ? ` · ${c.form_type}` : ""}
+          </Text>
+          <View style={{ marginTop: spacing.sm }}>
+            <StatusPill statusText={c.status_text_en} />
+          </View>
+        </View>
+        <View style={{ gap: spacing.sm, alignItems: "flex-end" }}>
+          <Text onPress={() => onArchive(c.user_case_id!, isArchived)} style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+            {isArchived ? "Unarchive" : "Archive"}
+          </Text>
+          <Text onPress={() => onRemove(c.user_case_id!)} style={{ fontSize: fontSize.xs, color: colors.danger }}>
+            Remove
+          </Text>
+        </View>
       </View>
-      <View style={styles.cardActions}>
-        <Pressable onPress={() => onArchive(c.user_case_id!, isArchived)} hitSlop={8}>
-          <Text style={styles.cardAction}>{isArchived ? "Unarchive" : "Archive"}</Text>
-        </Pressable>
-        <Pressable onPress={() => onRemove(c.user_case_id!)} hitSlop={8}>
-          <Text style={[styles.cardAction, styles.cardActionDanger]}>Remove</Text>
-        </Pressable>
-      </View>
-    </Pressable>
+    </ListRow>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  content: { padding: 16, paddingBottom: 48 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  email: { fontSize: 13, color: "#666" },
-  signOut: { fontSize: 13, color: "#666" },
-  form: { borderWidth: 1, borderColor: "#e5e5e5", borderRadius: 8, padding: 12, marginBottom: 20, gap: 8 },
-  formTitle: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: "#d4d4d4", borderRadius: 6, padding: 10, fontSize: 14 },
-  button: { backgroundColor: "#171717", borderRadius: 6, padding: 12, alignItems: "center" },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 14 },
-  sectionTitle: { fontSize: 13, fontWeight: "600", marginBottom: 8, marginTop: 8 },
-  empty: { fontSize: 14, color: "#888" },
-  card: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-    gap: 12,
-  },
-  cardTitle: { fontSize: 15, fontWeight: "600" },
-  cardMeta: { fontSize: 11, color: "#888", textTransform: "uppercase", marginTop: 2 },
-  cardStatus: { fontSize: 13, color: "#333", marginTop: 6 },
-  cardActions: { justifyContent: "center", gap: 8 },
-  cardAction: { fontSize: 12, color: "#666" },
-  cardActionDanger: { color: "#dc2626" },
-});
