@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
@@ -106,12 +106,15 @@ function PasswordForm() {
       )}
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm }}>
-        <Text
+        <Pressable
           onPress={() => setMode(mode === "signin" ? "signup" : "signin")}
-          style={{ fontSize: fontSize.xs, color: colors.textMuted }}
+          accessibilityRole="button"
+          hitSlop={12}
         >
-          {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
-        </Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+            {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
+          </Text>
+        </Pressable>
 
         {mode === "signin" && (
           <Link href="/forgot-password" style={{ fontSize: fontSize.xs, color: colors.textMuted }}>

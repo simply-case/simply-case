@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { makeRedirectUri } from "expo-auth-session";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -78,12 +78,16 @@ export default function ForgotPasswordScreen() {
             </Text>
           )}
 
-          <Text
+          <Pressable
             onPress={() => router.back()}
-            style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", marginTop: spacing.md }}
+            accessibilityRole="button"
+            hitSlop={12}
+            style={{ marginTop: spacing.md }}
           >
-            ← Back to sign in
-          </Text>
+            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center" }}>
+              ← Back to sign in
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

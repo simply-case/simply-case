@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, RefreshControl, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { router } from "expo-router";
 import { normalizeCaseKey, type Database } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
@@ -113,9 +113,9 @@ export default function DashboardScreen() {
         <>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg }}>
             <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>{session?.user.email}</Text>
-            <Text onPress={signOut} style={{ fontSize: fontSize.sm, color: colors.textMuted }}>
-              Sign out
-            </Text>
+            <Pressable onPress={signOut} accessibilityRole="button" hitSlop={12}>
+              <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>Sign out</Text>
+            </Pressable>
           </View>
 
           <Card style={{ marginBottom: spacing.xl, gap: spacing.sm }}>
@@ -205,13 +205,23 @@ function CaseCard({
             <StatusPill statusText={c.status_text_en} />
           </View>
         </View>
-        <View style={{ gap: spacing.sm, alignItems: "flex-end" }}>
-          <Text onPress={() => onArchive(c.user_case_id!, isArchived)} style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-            {isArchived ? "Unarchive" : "Archive"}
-          </Text>
-          <Text onPress={() => onRemove(c.user_case_id!)} style={{ fontSize: fontSize.xs, color: colors.danger }}>
-            Remove
-          </Text>
+        {/* Pressable + hitSlop rather than <Text onPress>: these labels are
+            11px, well under a comfortable touch target, and they sit inside
+            ListRow's own Pressable — the nested Pressable is what reliably
+            claims the touch so tapping "Remove" doesn't also navigate. */}
+        <View style={{ gap: spacing.md, alignItems: "flex-end" }}>
+          <Pressable
+            onPress={() => onArchive(c.user_case_id!, isArchived)}
+            accessibilityRole="button"
+            hitSlop={12}
+          >
+            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+              {isArchived ? "Unarchive" : "Archive"}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => onRemove(c.user_case_id!)} accessibilityRole="button" hitSlop={12}>
+            <Text style={{ fontSize: fontSize.xs, color: colors.danger }}>Remove</Text>
+          </Pressable>
         </View>
       </View>
     </ListRow>

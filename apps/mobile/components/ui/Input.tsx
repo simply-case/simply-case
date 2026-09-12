@@ -8,9 +8,10 @@ interface InputProps extends TextInputProps {
 }
 
 /**
- * forwardRef so a screen can chain focus (email input's onSubmitEditing ->
- * password input ref), which the previous hand-rolled TextInputs never
- * supported — enter/return just did nothing.
+ * forwardRef so a screen can chain focus (email's onSubmitEditing -> focus
+ * the password field). Nothing uses the ref yet — the screens currently
+ * submit on return instead — but the alternative is rewriting every caller
+ * later, and forwardRef costs nothing until then.
  */
 export const Input = forwardRef<TextInput, InputProps>(function Input(
   { label, error, style, ...props },
