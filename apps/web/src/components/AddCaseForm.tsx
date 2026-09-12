@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useEffect } from "react";
+import { Button, Card, Input } from "@/components/ui";
 import { addCase, type AddCaseState } from "@/app/cases/actions";
 
 const initialState: AddCaseState = { status: "idle" };
@@ -14,50 +15,45 @@ export function AddCaseForm() {
   }, [state.status]);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-3 rounded-lg border border-neutral-200 p-4">
-      <h2 className="text-sm font-medium text-neutral-900">Add a case</h2>
+    <Card>
+      <form ref={formRef} action={formAction} className="space-y-3">
+        <h2 className="text-sm font-semibold text-[var(--color-text)]">Add a case</h2>
 
-      <div className="flex gap-2">
-        <select
-          name="provider"
-          defaultValue="uscis"
-          className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
-        >
-          <option value="uscis">USCIS</option>
-          <option value="eoir" disabled>
-            EOIR (coming soon)
-          </option>
-          <option value="ceac" disabled>
-            CEAC (coming soon)
-          </option>
-        </select>
-        <input
-          name="caseKey"
-          required
-          placeholder="Receipt number, e.g. IOE0912345678"
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-        />
-      </div>
+        <div className="flex gap-2">
+          <select
+            name="provider"
+            defaultValue="uscis"
+            aria-label="Case provider"
+            className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2.5 text-sm text-[var(--color-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          >
+            <option value="uscis">USCIS</option>
+            <option value="eoir" disabled>
+              EOIR (coming soon)
+            </option>
+            <option value="ceac" disabled>
+              CEAC (coming soon)
+            </option>
+          </select>
+          <div className="flex-1">
+            <Input name="caseKey" required placeholder="Receipt number, e.g. IOE0912345678" aria-label="Receipt number" />
+          </div>
+        </div>
 
-      <input
-        name="nickname"
-        placeholder="Nickname (optional) — shown in notifications"
-        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-      />
+        <Input name="nickname" placeholder="Nickname (optional) — shown in notifications" aria-label="Nickname" />
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {pending ? "Adding…" : "Add case"}
-      </button>
+        <Button type="submit" disabled={pending} className="w-full">
+          {pending ? "Adding…" : "Add case"}
+        </Button>
 
-      {state.status !== "idle" && (
-        <p className={`text-sm ${state.status === "error" ? "text-red-600" : "text-green-700"}`}>
-          {state.message}
-        </p>
-      )}
-    </form>
+        {state.status !== "idle" && (
+          <p
+            role="status"
+            className={`text-sm ${state.status === "error" ? "text-[var(--color-danger)]" : "text-[var(--color-accent)]"}`}
+          >
+            {state.message}
+          </p>
+        )}
+      </form>
+    </Card>
   );
 }

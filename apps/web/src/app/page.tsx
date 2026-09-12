@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AddCaseForm } from "@/components/AddCaseForm";
 import { CaseCard } from "@/components/CaseCard";
+import { EmptyState } from "@/components/ui";
 import { signOut } from "@/app/cases/actions";
 
 export default async function DashboardPage() {
@@ -24,29 +25,33 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-neutral-900">mycase pro</h1>
+        <h1 className="text-xl font-semibold text-[var(--color-text)]">mycase pro</h1>
         <form action={signOut}>
-          <button type="submit" className="text-sm text-neutral-500 hover:text-neutral-900">
+          <button
+            type="submit"
+            className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded"
+          >
             Sign out
           </button>
         </form>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">{user.email}</p>
+      <p className="mt-1 text-sm text-[var(--color-text-muted)]">{user.email}</p>
 
       <div className="mt-6">
         <AddCaseForm />
       </div>
 
-      {error && <p className="mt-6 text-sm text-red-600">Couldn&apos;t load your cases.</p>}
+      {error && <p className="mt-6 text-sm text-[var(--color-danger)]">Couldn&apos;t load your cases.</p>}
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-neutral-900">
+        <h2 className="text-sm font-medium text-[var(--color-text)]">
           Your cases {active.length > 0 && `(${active.length})`}
         </h2>
         {active.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">
-            No cases yet — add one above to start tracking it.
-          </p>
+          <EmptyState
+            title="No cases yet"
+            message="Add a USCIS receipt number above to start tracking its status."
+          />
         ) : (
           <ul className="mt-3 space-y-3">
             {active.map((c) => (
@@ -58,7 +63,7 @@ export default async function DashboardPage() {
 
       {archived.length > 0 && (
         <section className="mt-8">
-          <h2 className="text-sm font-medium text-neutral-900">Archived ({archived.length})</h2>
+          <h2 className="text-sm font-medium text-[var(--color-text)]">Archived ({archived.length})</h2>
           <ul className="mt-3 space-y-3">
             {archived.map((c) => (
               <CaseCard key={c.user_case_id} c={c} />

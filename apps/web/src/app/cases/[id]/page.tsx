@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { Card, EmptyState, StatusPill } from "@/components/ui";
 
 export default async function CaseDetailPage({
   params,
@@ -32,48 +33,52 @@ export default async function CaseDetailPage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-900">
+      <Link
+        href="/"
+        className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded"
+      >
         ← All cases
       </Link>
 
-      <h1 className="mt-2 text-xl font-semibold text-neutral-900">
+      <h1 className="mt-2 text-xl font-semibold text-[var(--color-text)]">
         {caseDetail.nickname || caseDetail.case_key}
       </h1>
-      <p className="mt-0.5 text-xs uppercase tracking-wide text-neutral-500">
+      <p className="mt-0.5 text-xs uppercase tracking-wide text-[var(--color-text-faint)]">
         {caseDetail.provider} · {caseDetail.case_key}
         {caseDetail.form_type && ` · ${caseDetail.form_type}`}
       </p>
 
-      <div className="mt-6 rounded-lg border border-neutral-200 p-4">
-        <p className="text-sm font-medium text-neutral-900">
+      <Card className="mt-6 space-y-2">
+        <StatusPill statusText={caseDetail.status_text_en} />
+        <p className="text-sm font-medium text-[var(--color-text)]">
           {caseDetail.status_text_en ?? "Pending first check…"}
         </p>
         {caseDetail.status_detail_en && (
-          <p className="mt-2 text-sm text-neutral-600">{caseDetail.status_detail_en}</p>
+          <p className="text-sm text-[var(--color-text-muted)]">{caseDetail.status_detail_en}</p>
         )}
         {caseDetail.last_checked_at && (
-          <p className="mt-3 text-xs text-neutral-400">
+          <p className="pt-1 text-xs text-[var(--color-text-faint)]">
             Last checked {new Date(caseDetail.last_checked_at).toLocaleString()}
           </p>
         )}
-      </div>
+      </Card>
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-neutral-900">History</h2>
+        <h2 className="text-sm font-medium text-[var(--color-text)]">History</h2>
         {!events || events.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">No history yet.</p>
+          <EmptyState title="No history yet" message="This case hasn't been checked yet, or nothing has changed." />
         ) : (
-          <ol className="mt-3 space-y-4 border-l border-neutral-200 pl-4">
+          <ol className="mt-3 space-y-4 border-l border-[var(--color-border)] pl-4">
             {events.map((e) => (
               // observed_at is NOT NULL on case_status_events; the view type
               // widens it to nullable, but the underlying constraint holds.
               <li key={e.event_id}>
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-[var(--color-text-faint)]">
                   {e.observed_at && new Date(e.observed_at).toLocaleDateString()}
                 </p>
-                <p className="mt-0.5 text-sm text-neutral-800">{e.status_text_en}</p>
+                <p className="mt-0.5 text-sm text-[var(--color-text)]">{e.status_text_en}</p>
                 {e.status_detail_en && (
-                  <p className="mt-0.5 text-sm text-neutral-500">{e.status_detail_en}</p>
+                  <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">{e.status_detail_en}</p>
                 )}
               </li>
             ))}

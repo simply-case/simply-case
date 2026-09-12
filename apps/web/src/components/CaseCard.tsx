@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { archiveCase, unarchiveCase, removeCase } from "@/app/cases/actions";
+import { Card, StatusPill } from "@/components/ui";
 import type { Database } from "@mycasepro/shared";
 
 type CaseRow = Database["public"]["Views"]["my_case_details"]["Row"];
@@ -19,20 +20,23 @@ export function CaseCard({ c }: { c: CaseRow }) {
   const userCaseId = c.user_case_id;
 
   return (
-    <li className="flex items-start justify-between gap-4 rounded-lg border border-neutral-200 p-4">
+    <Card as="li" className={`flex items-start justify-between gap-4 ${isArchived ? "opacity-65" : ""}`}>
       <div className="min-w-0">
-        <Link href={`/cases/${c.tracked_case_id}`} className="font-medium text-neutral-900 hover:underline">
+        <Link
+          href={`/cases/${c.tracked_case_id}`}
+          className="font-medium text-[var(--color-text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded"
+        >
           {c.nickname || c.case_key}
         </Link>
-        <p className="mt-0.5 text-xs uppercase tracking-wide text-neutral-500">
+        <p className="mt-0.5 text-xs uppercase tracking-wide text-[var(--color-text-faint)]">
           {c.provider} · {c.case_key}
           {c.form_type && ` · ${c.form_type}`}
         </p>
-        <p className="mt-2 text-sm text-neutral-700">
-          {c.status_text_en ?? (c.last_checked_at ? "No status yet" : "Pending first check…")}
-        </p>
+        <div className="mt-2">
+          <StatusPill statusText={c.status_text_en} />
+        </div>
         {c.last_checked_at && (
-          <p className="mt-1 text-xs text-neutral-400">
+          <p className="mt-2 text-xs text-[var(--color-text-faint)]">
             Last checked {new Date(c.last_checked_at).toLocaleString()}
           </p>
         )}
@@ -43,7 +47,7 @@ export function CaseCard({ c }: { c: CaseRow }) {
           <button
             disabled={pending}
             onClick={() => startTransition(() => unarchiveCase(userCaseId))}
-            className="rounded border border-neutral-300 px-2 py-1 text-neutral-700 disabled:opacity-50"
+            className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           >
             Unarchive
           </button>
@@ -51,7 +55,7 @@ export function CaseCard({ c }: { c: CaseRow }) {
           <button
             disabled={pending}
             onClick={() => startTransition(() => archiveCase(userCaseId))}
-            className="rounded border border-neutral-300 px-2 py-1 text-neutral-700 disabled:opacity-50"
+            className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text)] hover:bg-[var(--color-surface-muted)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           >
             Archive
           </button>
@@ -63,11 +67,11 @@ export function CaseCard({ c }: { c: CaseRow }) {
               startTransition(() => removeCase(userCaseId));
             }
           }}
-          className="rounded border border-red-200 px-2 py-1 text-red-600 disabled:opacity-50"
+          className="rounded border border-[var(--color-danger)]/30 px-2 py-1 text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]"
         >
           Remove
         </button>
       </div>
-    </li>
+    </Card>
   );
 }
