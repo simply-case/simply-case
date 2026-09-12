@@ -182,6 +182,55 @@ export type Database = {
           },
         ]
       }
+      // Hand-written to match migration 0009_poll_runs.sql — this file is
+      // normally `supabase gen types` output, but that requires the
+      // migration to be pushed to the linked project first. Regenerate via
+      // `npm run db:types` after pushing and diff against this by hand.
+      poll_runs: {
+        Row: {
+          changed: number | null
+          claimed: number | null
+          created_at: string
+          crash_message: string | null
+          crashed: boolean
+          error_kinds: Json | null
+          errored: number | null
+          finished_at: string | null
+          id: string
+          provider: Database["public"]["Enums"]["case_provider"]
+          started_at: string
+          updated: number | null
+        }
+        Insert: {
+          changed?: number | null
+          claimed?: number | null
+          created_at?: string
+          crash_message?: string | null
+          crashed?: boolean
+          error_kinds?: Json | null
+          errored?: number | null
+          finished_at?: string | null
+          id?: string
+          provider: Database["public"]["Enums"]["case_provider"]
+          started_at?: string
+          updated?: number | null
+        }
+        Update: {
+          changed?: number | null
+          claimed?: number | null
+          created_at?: string
+          crash_message?: string | null
+          crashed?: boolean
+          error_kinds?: Json | null
+          errored?: number | null
+          finished_at?: string | null
+          id?: string
+          provider?: Database["public"]["Enums"]["case_provider"]
+          started_at?: string
+          updated?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

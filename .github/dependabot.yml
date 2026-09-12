@@ -1,0 +1,24 @@
+# Automates what HANDOFF.md flagged as manual toil: "GitHub reports 2
+# moderate vulnerabilities on main." Dependabot opens PRs for these on its
+# own schedule instead of relying on someone remembering to check.
+#
+# Each ecosystem is a separate ADR: root (shared devDependency: typescript),
+# apps/web, apps/mobile, packages/shared all have their own package.json /
+# lockfile-equivalent inside the npm workspace.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # Security patches land individually so each is reviewable on its own;
+      # routine version bumps are batched to cut down PR noise.
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
