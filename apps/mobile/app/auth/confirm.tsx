@@ -56,7 +56,8 @@ export default function AuthConfirmScreen() {
       //
       // A recovery link signs the user in like any other, so without this
       // branch they'd land on the dashboard and never be asked for the new
-      // password they came here to set.
+      // password they came here to set. "/" redirects to "/cases" — see
+      // the note in reset-password.tsx.
       router.replace(params.type === "recovery" ? "/reset-password" : "/");
     });
   }, [url]);

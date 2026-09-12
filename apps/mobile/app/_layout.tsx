@@ -52,7 +52,7 @@ function RootNavigator() {
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
-        <Stack.Screen name="sign-in" options={{ title: "mycase pro" }} />
+        <Stack.Screen name="sign-in" options={{ title: "Simply Case" }} />
         <Stack.Screen name="forgot-password" options={{ title: "Reset password" }} />
       </Stack.Protected>
 

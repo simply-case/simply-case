@@ -33,6 +33,8 @@ export default function ResetPasswordScreen() {
     }
     // Session is already active, so the root layout's Stack.Protected will
     // render the app group — replace() just clears this screen off the stack.
+    // (app)/index.tsx redirects "/" to "/cases" (a Tabs layout has no
+    // implicit index the way a Stack's index.tsx did).
     router.replace("/");
   }
 
