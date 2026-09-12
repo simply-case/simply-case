@@ -205,3 +205,28 @@ tier. Reasoning in PLAN.md.
 
 Opus for plans, ideas, and questions. Sonnet 5 for coding and execution.
 Flag the switch when moving between the two.
+
+---
+
+## Phase B progress log (2026-09-11)
+
+Done in `feature/backend-hardening`, not yet pushed:
+- B1: `poll_runs` table (migration 0009) + check-cases writes a row per
+  invocation (start row with `claimed`, filled in with counts/error_kinds on
+  exit, `crashed`+`crash_message` if the batch loop throws). Hand-patched
+  `database.types.ts` to match — regenerate for real via `npm run db:types`
+  once this migration is actually pushed.
+- B2: stale push queue drained (migration 0010 marks existing pending push
+  rows `skipped`, widens the status check constraint) and `check-cases`
+  stops enqueueing new `channel='push'` rows until a consumer exists.
+- B5: `.github/dependabot.yml` added (weekly npm + github-actions checks,
+  security patches separated from routine bumps).
+- `scripts/check-poll-health.sql` added for Phase A's traffic verification.
+
+**Not done — each needs the user directly, not just code:**
+- B3 (`secure_password_change`): a `supabase config push`, needs explicit
+  sign-off per the standing config-push rule.
+- B4 (rotate 3 credentials): requires logging into three dashboards
+  (Supabase, Resend, USCIS) — can't be done from the repo.
+- B6 (delete `admin@mycasepro.test`): a live-database delete against the
+  shared production project — flagging rather than doing unasked.

@@ -119,38 +119,79 @@ Deno.serve(async (req: Request) => {
     errors: [],
   };
 
-  for (const [i, trackedCase] of cases.entries()) {
-    if (i > 0) await sleep(minIntervalMs);
+  // Written before the loop so a crash mid-batch still leaves a row with
+  // claimed count and started_at — finished_at stays null and crashed=false
+  // until the catch/finally below, which is itself evidence something hung
+  // rather than merely erred. This is the answer to "is polling healthy?"
+  // that previously required cross-referencing cron.job_run_details with
+  // tracked_cases.last_checked_at — see docs/ROADMAP.md Phase B1.
+  const { data: runRow } = await db
+    .from("poll_runs")
+    .insert({ provider: "uscis", claimed: cases.length })
+    .select("id")
+    .single();
+  const runId: string | undefined = runRow?.id;
 
-    if (!isValidReceiptNumber(trackedCase.case_key)) {
-      // Shouldn't happen — case_key is validated on insert — but a poller
-      // must never crash a whole batch over one bad row.
-      summary.errored += 1;
-      summary.errors.push({
-        case_key: trackedCase.case_key,
-        kind: "invalid_format",
-        message: "case_key failed validation at poll time",
-      });
-      continue;
-    }
+  try {
+    for (const [i, trackedCase] of cases.entries()) {
+      if (i > 0) await sleep(minIntervalMs);
 
-    try {
-      const result = await uscis.fetchStatus(trackedCase.case_key);
-      await applyResult(db, trackedCase, result);
-      summary.updated += 1;
-      if (result.bodyHash !== trackedCase.body_hash) summary.changed += 1;
-    } catch (e) {
-      summary.errored += 1;
-      const err = e instanceof UscisApiError
-        ? e
-        : new UscisApiError({ kind: "unknown", message: String(e) });
-      summary.errors.push({
-        case_key: trackedCase.case_key,
-        kind: err.kind,
-        message: err.message,
-      });
-      await recordError(db, trackedCase, err);
+      if (!isValidReceiptNumber(trackedCase.case_key)) {
+        // Shouldn't happen — case_key is validated on insert — but a poller
+        // must never crash a whole batch over one bad row.
+        summary.errored += 1;
+        summary.errors.push({
+          case_key: trackedCase.case_key,
+          kind: "invalid_format",
+          message: "case_key failed validation at poll time",
+        });
+        continue;
+      }
+
+      try {
+        const result = await uscis.fetchStatus(trackedCase.case_key);
+        await applyResult(db, trackedCase, result);
+        summary.updated += 1;
+        if (result.bodyHash !== trackedCase.body_hash) summary.changed += 1;
+      } catch (e) {
+        summary.errored += 1;
+        const err = e instanceof UscisApiError
+          ? e
+          : new UscisApiError({ kind: "unknown", message: String(e) });
+        summary.errors.push({
+          case_key: trackedCase.case_key,
+          kind: err.kind,
+          message: err.message,
+        });
+        await recordError(db, trackedCase, err);
+      }
     }
+  } catch (e) {
+    if (runId) {
+      await db.from("poll_runs").update({
+        finished_at: new Date().toISOString(),
+        updated: summary.updated,
+        changed: summary.changed,
+        errored: summary.errored,
+        crashed: true,
+        crash_message: String(e),
+      }).eq("id", runId);
+    }
+    throw e;
+  }
+
+  if (runId) {
+    const errorKinds = summary.errors.reduce<Record<string, number>>((acc, e) => {
+      acc[e.kind] = (acc[e.kind] ?? 0) + 1;
+      return acc;
+    }, {});
+    await db.from("poll_runs").update({
+      finished_at: new Date().toISOString(),
+      updated: summary.updated,
+      changed: summary.changed,
+      errored: summary.errored,
+      error_kinds: errorKinds,
+    }).eq("id", runId);
   }
 
   return new Response(JSON.stringify(summary), {
@@ -243,23 +284,25 @@ async function applyResult(
   if (newEventId) {
     const { data: subscribers, error: subError } = await db
       .from("user_cases")
-      .select("id, notify_push, notify_email")
+      .select("id, notify_email")
       .eq("tracked_case_id", trackedCase.id)
       .is("archived_at", null);
     if (subError) throw new Error(`subscriber lookup failed: ${subError.message}`);
 
-    const rows = (subscribers ?? []).flatMap(
-      (s: { id: string; notify_push: boolean; notify_email: boolean }) => {
-        const channels: Array<"push" | "email"> = [];
-        if (s.notify_push) channels.push("push");
-        if (s.notify_email) channels.push("email");
-        return channels.map((channel) => ({
-          user_case_id: s.id,
-          case_status_event_id: newEventId,
-          channel,
-        }));
-      },
-    );
+    // push omitted deliberately: send-notifications has no consumer for it
+    // yet (only drains channel='email'), so enqueuing push rows here would
+    // just grow a queue nothing reads — see docs/ROADMAP.md Phase B2 and
+    // migration 0010_pause_push_notifications.sql, which cleaned up the
+    // backlog this created between Phase 6 and now. Bring back a
+    // notify_push check here (and re-select it above) when push
+    // notifications actually ship.
+    const rows = (subscribers ?? [])
+      .filter((s: { id: string; notify_email: boolean }) => s.notify_email)
+      .map((s: { id: string; notify_email: boolean }) => ({
+        user_case_id: s.id,
+        case_status_event_id: newEventId,
+        channel: "email" as const,
+      }));
     // user_id is required by the notifications table but not selected above;
     // fetch it via the user_cases -> notifications relationship is awkward
     // from here, so pull it in the same query instead.
