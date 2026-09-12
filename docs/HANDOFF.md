@@ -1,4 +1,4 @@
-# mycase pro / Simply Case — handoff
+# Simply Case — handoff
 
 Paste this into a new chat to continue. Rewritten 2026-09-12 — the
 previous version (still visible in git history) was from 2026-09-11 and
@@ -50,15 +50,27 @@ times, NVC tracking, news, range search) — see "New scope" below.
 - **Phased plan + progress log:** `docs/ROADMAP.md` — read this for the
   *current* sequencing and a log of what was deployed when.
 
-### ⚠️ Naming is currently split — needs a decision
+### Naming: "Simply Case" everywhere users can see it (resolved 2026-09-12)
 
-The **mobile app** was rebranded to **"Simply Case"** (real logo, app
-icon, splash screen — see below); that work **is merged into `main`** (PR
-#13, 2026-09-12). The **web app** still says **"mycase pro"**
-in three places (`apps/web/src/app/layout.tsx` title,
-`apps/web/src/app/page.tsx` and `login/page.tsx` headings). Pick one name
-and apply it everywhere — right now a user bouncing between web and
-mobile would see two different product names.
+Every user-visible string is now **Simply Case**: mobile app name/icon/
+splash, web page title and headings, notification email subjects, the Auth
+SMTP sender name, and the signup confirmation template.
+
+**Deliberately left as `mycasepro`** (internal, never shown to users, and
+expensive to change): the `@mycasepro/*` npm workspace scope, the Expo
+slug, the `mycasepro://` URL scheme and `pro.mycase.app` bundle ID (both
+tied to the Supabase redirect allowlist and the future store listing),
+`supabase/config.toml` `project_id`, and the local folder name.
+
+**Two renamed strings only take effect after a production step:**
+- `send-notifications` email subject → redeploy that function.
+- `sender_name` + confirmation template in `config.toml` → a
+  `supabase config push`. Bundle it into the Phase E config push (flag
+  first, `config diff` first). The Supabase dashboard SMTP sender name
+  can also be changed by hand in the meantime.
+- The `NOTIFICATION_FROM_EMAIL` **secret** (not just `.env.example`) still
+  carries the old display name until reset — do that with the Phase E
+  sender change.
 
 ## Stack
 
@@ -220,8 +232,9 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
 ## What's NOT built / not done, in suggested order
 
 1. ~~**Merge `feature/mobile-branding`**~~ — **done**, PR #13, 2026-09-12.
-2. **Resolve the naming split** — "mycase pro" (web) vs "Simply Case"
-   (mobile). Pick one, apply everywhere.
+2. ~~**Resolve the naming split**~~ — **done** 2026-09-12, "Simply Case"
+   everywhere visible. A couple of strings need a deploy/config push to go
+   live — see "Naming" near the top.
 3. **Rotate 3 credentials** — Supabase secret key, Resend API key, USCIS
    client secret. All were printed to chat transcripts earlier in this
    project (never to git). **Confirmed NOT yet rotated as of 2026-09-12.**

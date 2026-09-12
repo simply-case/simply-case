@@ -87,7 +87,7 @@ function renderEmail(n: PendingEmailNotification): { subject: string; text: stri
   // but the specific status text is not, since that's not something the
   // user typed themselves.
   const label = n.user_cases?.nickname || "your case";
-  const subject = lang === "es" ? `mycase pro: una actualización sobre ${label}` : `mycase pro: an update on ${label}`;
+  const subject = lang === "es" ? `Simply Case: una actualización sobre ${label}` : `Simply Case: an update on ${label}`;
   const text = lang === "es"
     ? `${label}:\n\n${statusText}\n\n${statusDetail ?? ""}`.trim()
     : `${label}:\n\n${statusText}\n\n${statusDetail ?? ""}`.trim();

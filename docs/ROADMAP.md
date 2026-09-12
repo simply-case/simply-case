@@ -1,4 +1,4 @@
-# mycase pro — roadmap
+# Simply Case — roadmap
 
 Working plan agreed 2026-09-11. Sequenced deliberately; read "Why this
 order" before reordering anything.

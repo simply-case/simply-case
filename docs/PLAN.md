@@ -1,4 +1,4 @@
-# mycase pro — build plan
+# Simply Case — build plan
 
 Immigration case tracker (USCIS / CEAC / EOIR) with status history and change notifications.
 
