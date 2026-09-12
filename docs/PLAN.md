@@ -88,6 +88,12 @@ Expo Push + Resend. Exponential backoff per case on `consecutive_errors`.
   push it to Phase 7 and consider a "user-assisted refresh" flow (user solves the
   challenge in an embedded webview) rather than automated solving, which would
   breach their terms.
+  **Confirmed 2026-09-12:** user-assisted refresh is the decision, for both
+  immigrant (NVC case number) and nonimmigrant (location + DS-160 application
+  ID) cases. The cost — no background polling, therefore no push on an NVC
+  status change — is accepted, mitigated by a weekly "tap to refresh" reminder
+  push. A CAPTCHA-solving service was explicitly rejected; a session-reuse
+  hybrid is deferred pending an unknown session lifetime. See HANDOFF.md.
 
 Rate-limit politely, set a real User-Agent, cache aggressively, and honor the
 terms of each source. Treat receipt numbers as PII: encrypt at rest or store a
@@ -145,12 +151,28 @@ subscribe to the same case today and each get their own notifications. What a
 firm tier adds later is a roster, team accounts, billing, and permissions —
 all additive. No migration of existing data required.
 
-## Processing-time estimates: deferred, not designed out
+## Processing-time estimates: ~~deferred~~ **in scope as of 2026-09-12**
 
-Not in v1. But `tracked_cases.form_type` and `tracked_cases.submitted_at` are
-already captured, and those are exactly the join keys a processing-time feature
-needs. So we accumulate the inputs from day one and can light the feature up
-later against historical data we already have, rather than starting cold.
+*Original decision (2026-09-11), kept for context:* not in v1, but
+`tracked_cases.form_type` and `tracked_cases.submitted_at` are already
+captured — exactly the join keys a processing-time feature needs — so we
+accumulate the inputs from day one rather than starting cold.
+
+**Reversed 2026-09-12.** Two things changed the calculus:
+
+1. USCIS publishes a **free, keyless JSON endpoint** for official processing
+   times (`egov.uscis.gov/processing-times/api/…`). We do not have to derive
+   estimates from our own historical data at all — the authoritative numbers
+   are available directly.
+2. Because form type and service center are derivable from the receipt, this
+   renders on the case detail screen with **zero user input**.
+
+NVC timeframes have no API and are scraped from travel.state.gov alongside the
+Visa Bulletin. Both are subject to the Cloudflare finding in HANDOFF.md.
+
+The *original* idea — estimates derived from our own observed data — is still
+a real differentiator later, since we will have real transition timings the
+official numbers don't capture. It is now an enhancement, not the v1 mechanism.
 
 ## Notification content: private by default
 
@@ -168,3 +190,63 @@ No plan/quota columns in the schema. Natural future levers, in order of least
 disruption: number of active cases, check frequency, history depth. Adding a
 tier later means a `plan` column on `profiles` plus enforcement — easy. The
 hard part is social (existing free users), not technical.
+
+## Visa Bulletin: store everything, personalize optionally (2026-09-12)
+
+Daily cron; store the **complete** bulletin (Final Action Dates and Dates for
+Filing, family + employment, all country columns) plus the **raw HTML
+alongside the parsed rows**. State Dept reshuffles that markup periodically,
+and a silent parse failure means silently wrong dates on an immigration app —
+parse failure must alert, not degrade quietly.
+
+The feature worth building is the personalization on top: user optionally
+saves category + country + priority date, and the screen answers "your date is
+current" / "you're ~4 months out." The raw table is a commodity; every
+competitor has one. Users who skip setup still see the full table.
+
+## Range search: official API, cached, globally rate-limited (2026-09-12)
+
+Receipt numbers are sequential, so the block around a user's receipt is their
+filing cohort. Reporting "34 of 62 nearby cases approved" is the only way to
+answer "is my case stuck, or is everyone stuck?" — the question the product
+otherwise cannot address, and the incumbent's most-praised feature.
+
+Uses the **official USCIS API**, not the public egov page: production allows
+400,000 requests/day at 10 TPS, so quota is ample and we avoid the Cloudflare
+exposure that affects the scrape-based features.
+
+Three design consequences, in order of how easy they are to get wrong:
+
+1. **The 10 TPS ceiling is per account, shared with the polling cron**, so the
+   rate limiter must live in Postgres. Concurrent edge function invocations
+   with in-memory limiters would each independently exceed it.
+2. **It cannot be synchronous** — 100 lookups is ≥10 seconds. Async job,
+   progressive results or a push on completion.
+3. **Cache every scanned receipt.** Coverage compounds across users; the next
+   person in that block gets an instant, free answer.
+
+Per-user daily cap (~5) exists to protect the shared TPS budget from one
+user's retry loop, not to conserve quota.
+
+**Recorded tradeoff:** bulk sequential enumeration is a recognisable abuse
+signature, and API credentials are tied to the account — losing API access
+would kill the core product, not just this feature. USCIS publishes no rule
+against it and provisions 400k/day. Raised, considered, and approved by the
+user. Not to be re-litigated.
+
+## News: official structured sources, server-side only (2026-09-12)
+
+Federal Register API (free, JSON, filterable to USCIS/DHS/State immigration
+documents — high signal, rarely used by apps in this category) plus USCIS
+newsroom and travel.state.gov announcements for plain-language items.
+
+Fetched on a cron into a `news_items` table and served from our own DB.
+Never fetched from the client: otherwise a dead upstream feed breaks the app,
+and there is no way to suppress junk.
+
+## Civics quiz: out of scope, by decision (2026-09-12)
+
+The incumbent bundles a USCIS citizenship civics quiz. Deliberately excluded —
+it is a study-app feature attached to a tracking product, and it shares no
+data model, no backend, and no notification surface with anything else here.
+Recorded so it is not re-proposed as an oversight.

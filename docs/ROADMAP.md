@@ -180,12 +180,79 @@ Only now, or sooner if anyone else needs an account.
 
 ---
 
+## Phase F — feature parity scope (added 2026-09-12)
+
+Full reasoning, rejected alternatives, and the Cloudflare evidence are in
+**HANDOFF.md → "New scope, confirmed 2026-09-12"**. Product decisions are in
+**PLAN.md**. This is the sequencing only.
+
+**F0 gates F2, F3 and F4 — do it first.**
+
+- [ ] **F0. Cloudflare spike (~20 min).** Throwaway edge function that fetches
+      the *real production URLs* (a specific monthly bulletin page, the NVC
+      timeframes page, the processing-times API endpoint) and returns status
+      codes. No DB writes, no migration, no config push. Delete after.
+      ⚠️ Deploys to the shared Supabase project — user has approved this
+      specific deploy. **200 → build crons on Supabase. 403 → move the
+      fetchers to a scheduled GitHub Action** (free, repo is public).
+      Either way: a 403 at runtime must alert, not crash.
+
+- [ ] **F1. Rename the `More` tab to `Resources`** and give it a real index
+      (Visa Bulletin · Processing Times · Range Search). Cheap, unblocks
+      having somewhere to put F2–F5. Tab layout stays at 4.
+
+- [ ] **F2. Visa Bulletin.** Daily cron → resolve next month's URL → parse →
+      store parsed rows *and raw HTML* → alert on parse failure. Full table
+      screen first, then the optional personalized view (category + country +
+      priority date → "your date is current"). "New bulletin" notification
+      queues behind push (F7).
+
+- [ ] **F3. Processing times.** USCIS JSON endpoint (no key) rendered on case
+      detail with no user input, since form type and service center come from
+      the receipt. NVC timeframes scraped on the same cron as F2.
+
+- [ ] **F4. Real news.** Federal Register API + USCIS/State feeds → cron →
+      `news_items` table → replace the placeholder cards in `news.tsx`.
+      Server-side only; never fetch feeds from the client.
+
+- [ ] **F5. NVC / CEAC, user-assisted refresh.** WebView with the case number
+      prefilled, user solves the CAPTCHA, parse the result into
+      `case_status_events`. **Both types**: immigrant (case number) and
+      nonimmigrant (interview location + DS-160 application ID). CEAC's status
+      vocabulary is small and maps onto the existing `classifyStatus()`.
+      No background polling by design — the weekly "tap to refresh" reminder
+      push queues behind F7.
+
+- [ ] **F6. Range search.** Official USCIS API (not the egov page). Async job
+      queue, **global rate limiter in Postgres** (10 TPS is the account
+      ceiling, shared with `check-cases`), cache every scanned receipt, ~5
+      scans/user/day. Progressive results or push on completion — never a
+      synchronous spinner, 100 lookups is ≥10 seconds.
+
+- [ ] **F7. Push notifications.** Unchanged prerequisites: folder rename (no
+      space in the path) + Apple $99 + Google $25. Three queued consumers land
+      here at once — status change, new bulletin, NVC refresh reminder.
+
+- [ ] **F8. Legal pages.** `/legal/terms` + `/legal/privacy` as real web URLs
+      (the App Store requires a privacy policy URL), mobile links out, plus a
+      "not affiliated with any U.S. government entity / not legal advice"
+      disclaimer on case screens. **User scheduled this last; standing
+      objection recorded — it is ~2 hours and a hard submission blocker, so
+      slot it into any gap.** Needs real answers from the user on what data is
+      stored and for how long.
+
+**Explicitly out of scope:** the Civics Quiz. A decision, not an oversight —
+see PLAN.md. EOIR is also not part of Phase F.
+
+---
+
 ## Deferred beyond this roadmap
 
-Push notifications (needs Apple $99 + Google $25; `devices` table exists but
-nothing reads it), EOIR and CEAC adapters, App Store / Play Store
-submission, processing-time estimates, account deletion / data export, paid
-tier. Reasoning in PLAN.md.
+EOIR adapter, App Store / Play Store submission, account deletion / data
+export, paid tier. Reasoning in PLAN.md.
+
+*Moved out of this list into Phase F on 2026-09-12:* push notifications,
+CEAC/NVC, and processing-time estimates.
 
 ---
 
