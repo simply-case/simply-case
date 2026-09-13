@@ -42,9 +42,10 @@ times, NVC tracking, news, range search) — see "New scope" below.
 - **Live web app:** https://simply-case-web.vercel.app
 - **Supabase project:** ref `ltpvagdbprwzqtasurez`, us-east-1
 - **Vercel project:** `simply-case-web`, root dir `apps/web`
-- **Local path:** `/Users/manimann/Documents/personal projects/mycasepro`
-  — note the **space in "personal projects"**; this breaks native iOS
-  builds (see blockers below), it is not just a cosmetic detail.
+- **Local path:** `/Users/manimann/Documents/personal-projects/mycasepro`
+  — renamed from `personal projects` (with a space) on 2026-09-12, because
+  the space broke local native iOS builds. If you find an old reference to
+  the spaced path, it's stale.
 - **Architecture & product decisions:** `docs/PLAN.md` — the schema
   design, de-duplication rationale, confirmed product decisions.
 - **Phased plan + progress log:** `docs/ROADMAP.md` — read this for the
@@ -84,7 +85,7 @@ Vercel · npm workspaces monorepo.
 1. **Monorepo** — `apps/web`, `apps/mobile`, `packages/shared` (Zod
    validators + generated Supabase types + design tokens + the status
    classifier, shared by both apps).
-2. **Database + RLS** — 10 migrations. `tracked_cases` is one shared row
+2. **Database + RLS** — 11 migrations. `tracked_cases` is one shared row
    per real-world case (provider + case_key); `user_cases` is the
    per-user subscription, so N users tracking the same receipt number
    costs one poll, not N. `tracked_cases`/`case_status_events` have no
@@ -95,13 +96,18 @@ Vercel · npm workspaces monorepo.
    against the live sandbox, not just docs: nested error envelope with
    string codes, OAuth creds in the POST body not Basic auth, two
    response schemas (IOE-prefix receipts omit submittedDate/
-   modifiedDate), 503/429 must NOT count against `consecutive_errors`
-   (sandbox is closed nights/weekends by design).
+   modifiedDate), 503/429 must NOT count against `consecutive_errors`.
+   USCIS documents the sandbox as Mon–Fri 7AM–8PM ET, but the user
+   observed traffic succeeding on the weekend (2026-09-12) — treat the
+   documented window as unreliable, not as a fact.
 4. **Polling pipeline** — `check-cases` Edge Function, every 15 min via
    `pg_cron` + `pg_net`. Auth is a shared secret (`CRON_SECRET`) in
    Supabase Vault, read at call time, never a literal in a migration.
    **Deployed with `--no-verify-jwt --use-api`** — that flag is
    mandatory, the cron authenticates via header, not a JWT.
+   **Both cron jobs use `timeout_milliseconds := 60000`** (migration 0011).
+   Without it pg_net hangs up after 5 s, which silently cut off most runs —
+   see "Polling outage, 2026-09-12" below.
 5. **`poll_runs` observability table** (new) — one row per `check-cases`
    invocation: claimed/updated/changed/errored counts, crash detection.
    Previously "is polling healthy?" required cross-referencing
@@ -159,7 +165,14 @@ Vercel · npm workspaces monorepo.
     `app/auth/confirm.tsx` (parses tokens from the URL fragment, calls
     `setSession()` directly — genuinely different mechanism from web's
     server-side PKCE exchange, not two implementations of the same
-    thing).
+    thing). **Verified on a real iPhone 2026-09-12** after fixing a bug (PR
+    #16): with the app already open, `Linking.useURL()` subscribed too late
+    and missed the link, so it always said "invalid or expired." The
+    listener now starts at app launch (`lib/deep-link.ts`).
+16. **Real-device smoke test passed (2026-09-12, iPhone via Expo Go):**
+    login, all tabs, case detail, quiet-hours save, reset link. Offline
+    behaviour **cannot** be tested in Expo Go (it loads JS from the dev
+    server, so airplane mode just fails to load) — needs a real build.
 
 ## 🚧 Real blockers right now
 
@@ -193,17 +206,16 @@ still fully testable solo). If that need arrives, this jumps the queue.
 re-enable `enable_confirmations` and turn on `secure_password_change` in
 the same `config diff` → `config push` (flag first, per the standing rule).
 
-### 2. Space in the local folder path breaks native iOS builds
+### ~~2. Space in the local folder path breaks native iOS builds~~ — RESOLVED
 
-`/Users/manimann/Documents/personal projects/mycasepro` — the space in
-"personal projects" makes CocoaPods' unquoted `bash -l -c "$PATH/script"`
-build phase split on the space and fail with a confusing "No such file or
-directory." This blocked every `npx expo run:ios` attempt this session.
-**Workaround in use:** `npx expo start --go` (Expo Go) instead of a real
-dev build — fine for UI work, but **push notifications genuinely need a
-real dev build** and will be blocked until the folder is renamed (to
-`personal-projects`, no space) or the project moved. User's call — other
-projects share that Documents folder.
+The parent folder was renamed to `personal-projects` on 2026-09-12. The
+space had made CocoaPods' unquoted build-phase script fail, blocking every
+`npx expo run:ios`. After the rename, the stale generated
+`apps/mobile/ios` folder (gitignored) must be regenerated, not reused.
+
+Note: this was only ever a **local** build blocker. EAS cloud builds
+(which is how TestFlight builds get made) never depended on the local
+path.
 
 ### 3. USCIS production access — waiting on the sandbox-traffic clock
 
@@ -212,8 +224,56 @@ active sandbox API traffic** before production access can be requested
 (developersupport@uscis.dhs.gov). Confirmed with the user 2026-09-12: not
 yet eligible. The polling cron is what generates the traffic, so the job
 is to keep it healthy and verify it's actually being credited — see
-ROADMAP Phase A, especially A4 (a closed sandbox returns 503, which our
-side treats as healthy but USCIS won't count).
+ROADMAP Phase A.
+
+**⚠️ TEMPORARY — polling sped up for this.** On 2026-09-12 the three
+`tracked_cases` rows were set to `check_interval_seconds = 840` (14 min,
+deliberately under the 15-min cron cadence) instead of the 21600 (6h)
+default, to generate more traffic (~290 calls/day instead of ~12). This
+was a direct SQL update, not a migration. **Revert once production access
+is granted**, before switching `USCIS_ENVIRONMENT` to production (the 10
+TPS budget is shared with range search):
+
+```sql
+update tracked_cases set check_interval_seconds = 21600 where provider = 'uscis';
+```
+
+### Polling outage, 2026-09-12 (fixed — and it may affect the streak)
+
+Found while verifying the speed-up. Neither cron job set a pg_net timeout,
+so `net.http_post` used its **5-second default**. `net._http_response`
+showed about two thirds of all calls to BOTH functions ending in "Timeout
+of 5000 ms reached" — already at 17:00 PT, before the speed-up. pg_cron
+still logged every run as 'succeeded' (that only means "queued").
+
+When the caller hangs up, runs get cut off: `poll_runs` rows with
+`claimed = 3` but no `finished_at`, whole ticks with no row at all, and
+`tracked_cases.next_check_at` advancing while `last_checked_at` stood
+still (no successful check between 19:00 and at least 23:15 PT). The one
+crash message, `error recording failed: Gateway Timeout`, is the same
+cut-off seen from inside the function.
+
+**Partial fix:** migration `0011_cron_http_timeout.sql` re-schedules both
+jobs with `timeout_milliseconds := 60000`. Pushed 2026-09-12 ~23:20 PT.
+
+**Still broken after 0011 (checked 2026-09-13 08:40 PT).** Calls no longer
+time out, but both functions now return **HTTP 500
+`{"error":"Gateway Timeout"}`** on their database calls. The runs at 02:00
+and 02:30 PT claimed 3, errored 2, updated 0, and crashed with `error
+recording failed: Gateway Timeout`. Yet from outside, the same RPC with the
+new `sb_secret_` key answers 200 in ~0.2 s, and the database is idle. So
+the failure is specific to **functions → database**. Both functions use the
+auto-injected legacy `SUPABASE_SERVICE_ROLE_KEY`, and the failure started
+near the Supabase key rotation. That's suspicious, but **unproven**: a
+bogus key gets a fast 401 from outside, not a timeout. Whether legacy API
+keys are disabled in the dashboard is unchecked. **Next action: Step 0 of
+`docs/PHASE_F_PLAN.md`** (switch functions to the new secret key, redeploy,
+verify; diagnostic function if that fails).
+
+**Open question:** it's unknown how long this was happening before the
+6-hour `net._http_response` retention window, so it's unknown how much of
+the "5 consecutive days" actually reached USCIS. Check the per-day
+`updated` counts in `poll_runs` before relying on any date.
 
 ## Known state of auth (verified live)
 
@@ -223,11 +283,11 @@ side treats as healthy but USCIS won't count).
 | Password login | ✅ works |
 | Forgot password → reset | ✅ works end to end, both web and mobile |
 | Magic link | ❌ removed at user's request |
-| Password login as mannmankirat@gmail.com | **No password set yet** (confirmed 2026-09-12) — was a magic-link-only account; forgot-password is the path to set one |
+| Password login as mannmankirat@gmail.com | ✅ password set via forgot-password (2026-09-12) |
 
-Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
-`admin@mycasepro.test` (disposable test account, password `admin123` —
-**still not deleted**, delete before real users).
+**Exactly one account exists:** `mannmankirat@gmail.com` (verified via
+`auth.users` count, 2026-09-12). `admin@mycasepro.test` and
+`manimsn1234@gmail.com` are gone.
 
 ## What's NOT built / not done, in suggested order
 
@@ -235,22 +295,24 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
 2. ~~**Resolve the naming split**~~ — **done** 2026-09-12, "Simply Case"
    everywhere visible. A couple of strings need a deploy/config push to go
    live — see "Naming" near the top.
-3. **Rotate 3 credentials** — Supabase secret key, Resend API key, USCIS
-   client secret. All were printed to chat transcripts earlier in this
-   project (never to git). **Confirmed NOT yet rotated as of 2026-09-12.**
-   Run `bash scripts/check-env.sh` after.
-4. **Delete `admin@mycasepro.test`** — only after confirming the owner
-   account can sign in via forgot-password (it's currently the only
-   account with a known-working password login).
+3. ~~**Rotate 3 credentials**~~ — **done 2026-09-12.** Supabase secret
+   key, Resend API key (updated in `.env.local`, the Supabase SMTP password,
+   AND the Edge Function secret), USCIS client secret. Edge Function
+   secrets verified by comparing SHA-256 digests from `supabase secrets
+   list` against `.env.local`, without printing values. **Lesson:** the
+   USCIS secret was first updated only in `.env.local`; the function kept
+   the old one until caught. A rotation isn't done until the digest
+   matches.
+4. ~~**Delete `admin@mycasepro.test`**~~ — **done 2026-09-12.**
 5. **Enable `secure_password_change`** — closes a real gap: right now a
    recovery link produces a full session, and the reset-password action
    only checks that a user exists, not that they recently
    re-authenticated — an open laptop could be used to lock the owner out.
    Bundle into the same config push as the domain/confirmations change.
-6. **Rename the project folder** (remove the space) — needed before any
-   native dev build work, which push notifications require.
+6. ~~**Rename the project folder**~~ — **done 2026-09-12**
+   (`personal-projects`).
 7. **Push notifications** (Expo Push) — `devices` table exists, nothing
-   reads it. Needs the folder rename (#6) plus Apple Developer ($99/yr)
+   reads it. Needs a real dev build plus Apple Developer ($99/yr)
    and Google Play ($25) accounts to test on a real device — Expo Go
    cannot receive real push.
 8. **Real News tab content** — still placeholder sample cards. **Source
@@ -262,8 +324,8 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
 10. **Review the 7 open Dependabot PRs** — do NOT bulk-merge. GitHub
     also still reports 2 moderate vulnerabilities on `main` (as of
     2026-09-12); check whether the grouped minor-patch PR clears them.
-    - Close the `react-native-async-storage` one — Expo SDK 57 pins that
-      package to 2.x; the proposed 3.x would break the mobile app.
+    - ~~Close the `react-native-async-storage` one~~ — **closed** 2026-09-12
+      (Expo SDK 57 pins that package to 2.x).
     - The `npm-minor-patch` grouped PR is safe to merge.
     - `typescript`, `eslint`, `@types/node` are all major-version jumps —
       test before merging, not urgent.
@@ -275,9 +337,9 @@ Existing accounts: `mannmankirat@gmail.com`, `manimsn1234@gmail.com`,
     below.
 12. **USCIS production access** — sandbox only. Needs 5 consecutive days
     of sandbox traffic, then emailing developersupport@uscis.dhs.gov.
-    **Not yet eligible (2026-09-12)** — see blocker #3. Passive: keep the
-    cron healthy and verify traffic per ROADMAP Phase A; nothing to build.
-13. **App Store / Play Store submission** — needs #6, #7's dev accounts,
+    **Not yet eligible (2026-09-12)** — see blocker #3 and the polling
+    outage note. Revert the temporary 14-min interval once granted.
+13. **App Store / Play Store submission** — needs #7's dev accounts,
     plus real screenshots/listing copy (icons are done, see item 13
     above under mobile app).
 14. Account deletion/data export, web push, paid tier — deliberately
@@ -535,12 +597,13 @@ bash scripts/check-env.sh
 bash scripts/check-poll-health.sql   # actually run via supabase db query --linked
 
 cd apps/mobile && npx expo start --go       # Expo Go — daily driver, fast
-cd apps/mobile && npx expo run:ios          # real dev build — currently broken, see blocker #2
+cd apps/mobile && npx expo run:ios          # local native dev build (unblocked by the folder rename; regenerate ios/ first)
 ```
 
 USCIS sandbox test receipts: `EAC9999103403` (has history),
 `EAC9999103400` (no history), `LIN9999106498` (has history). Sandbox is
-Mon–Fri 7AM–8PM EST; a 503 outside that window is expected.
+documented Mon–Fri 7AM–8PM EST, but weekend calls were observed
+succeeding on 2026-09-12.
 
 ## Lessons learned (don't re-learn these)
 
@@ -574,6 +637,18 @@ Mon–Fri 7AM–8PM EST; a 503 outside that window is expected.
 - **Compare branches against `origin/main`, not local `main`.** Merges
   happen on GitHub; an un-fetched local `main` makes merged branches look
   unmerged. `git fetch --prune` first.
+- **pg_net's `net.http_post` times out after 5 s by default.** Always pass
+  `timeout_milliseconds` for anything slower than a trivial call. Read
+  `net._http_response` (kept ~6h) to see real status codes and timeouts;
+  `cron.job_run_details` can't show them.
+- **A rotated secret isn't rotated until every copy matches.** Compare
+  `supabase secrets list` digests with `shasum -a 256` of the local
+  value; never print the value.
+- **Expo Go can't test offline behaviour** — it loads the JS bundle from
+  the dev server.
+- **Don't use `Linking.useURL()` on a screen that a deep link navigates
+  to.** The link event fires before the screen subscribes. Listen at app
+  start (`apps/mobile/lib/deep-link.ts`).
 - **Verify against reality, not assumption.** A live cron "succeeded"
   status only means pg_cron queued the HTTP request, not that the
   function did anything useful — this is exactly why `poll_runs` exists.
