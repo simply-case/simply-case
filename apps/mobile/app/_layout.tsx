@@ -4,6 +4,10 @@ import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
+// Side-effect import: starts the deep-link listener before any screen
+// mounts or navigates, so an incoming recovery link is never missed. See
+// lib/deep-link.ts for why this has to happen this early.
+import "@/lib/deep-link";
 
 export default function RootLayout() {
   return (
