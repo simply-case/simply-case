@@ -23,13 +23,19 @@ jobs:
           set -u
           UA="SimplyCase-Probe/0.1 (+https://github.com/simply-case/simply-case)"
 
-          declare -A URLS=(
-            [bulletin_index]="https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html"
-            [bulletin_sep_2026]="https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin/2026/visa-bulletin-for-september-2026.html"
-            [nvc_timeframes]="https://travel.state.gov/content/travel/en/us-visas/immigrate/nvc-timeframes.html"
-            [uscis_processing_forms]="https://egov.uscis.gov/processing-times/api/formtypes"
-            [uscis_news]="https://www.uscis.gov/news/all-news"
-            [federal_register]="https://www.federalregister.gov/api/v1/documents.json?per_page=1&conditions[agencies][]=u-s-citizenship-and-immigration-services"
+          # Plain indexed arrays, not `declare -A` — associative arrays
+          # need bash 4+, and this script was drafted/tested against
+          # macOS's default bash (3.2, no associative-array support) to
+          # catch exactly this kind of portability bug locally rather than
+          # discovering it only on a runner.
+          names=(bulletin_index bulletin_sep_2026 nvc_timeframes uscis_processing_forms uscis_news federal_register)
+          urls=(
+            "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html"
+            "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin/2026/visa-bulletin-for-september-2026.html"
+            "https://travel.state.gov/content/travel/en/us-visas/immigrate/nvc-timeframes.html"
+            "https://egov.uscis.gov/processing-times/api/formtypes"
+            "https://www.uscis.gov/news/all-news"
+            "https://www.federalregister.gov/api/v1/documents.json?per_page=1&conditions[agencies][]=u-s-citizenship-and-immigration-services"
           )
 
           {
@@ -42,8 +48,9 @@ jobs:
             echo "|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for name in "${!URLS[@]}"; do
-            url="${URLS[$name]}"
+          for i in "${!names[@]}"; do
+            name="${names[$i]}"
+            url="${urls[$i]}"
             body_file=$(mktemp)
             code=$(curl -sL -m 20 -o "$body_file" -w '%{http_code}' \
               -H "User-Agent: $UA" \
