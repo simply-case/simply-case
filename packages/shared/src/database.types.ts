@@ -231,6 +231,29 @@ export type Database = {
         }
         Relationships: []
       }
+      // Hand-patched for migration 0012 (not yet applied to production) —
+      // regenerate with `npm run db:types` after `supabase db push`.
+      ops_alerts: {
+        Row: {
+          detail: Json | null
+          id: string
+          kind: string
+          sent_at: string
+        }
+        Insert: {
+          detail?: Json | null
+          id?: string
+          kind: string
+          sent_at?: string
+        }
+        Update: {
+          detail?: Json | null
+          id?: string
+          kind?: string
+          sent_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

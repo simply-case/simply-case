@@ -80,9 +80,16 @@ Deno.serve(async (req: Request) => {
     // No body / non-JSON body is fine — batch_size just falls back to default.
   }
 
+  // SERVICE_SECRET_KEY, not the auto-injected SUPABASE_SERVICE_ROLE_KEY
+  // (the legacy JWT-format key): found 2026-09-13 that database calls from
+  // this function were failing ("Gateway Timeout" on every call) starting
+  // right around when the Supabase project's secret key was rotated. No
+  // fallback to the legacy key on purpose — if this secret is missing, fail
+  // loudly rather than silently running on a key that may be disabled. See
+  // docs/HANDOFF.md "Polling outage, 2026-09-12" for the full story.
   const supabaseUrl = requireEnv("SUPABASE_URL");
-  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const db = createClient(supabaseUrl, serviceRoleKey, {
+  const serviceSecretKey = requireEnv("SERVICE_SECRET_KEY");
+  const db = createClient(supabaseUrl, serviceSecretKey, {
     auth: { persistSession: false },
   });
 
