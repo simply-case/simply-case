@@ -24,6 +24,7 @@ export default function CasesLayout() {
           detail screen keeps its native header for the back button. */}
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="[id]" options={{ title: "Case" }} />
+      <Stack.Screen name="ceac-refresh/[id]" options={{ title: "Refresh visa status" }} />
     </Stack>
   );
 }

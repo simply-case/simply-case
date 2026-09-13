@@ -98,3 +98,26 @@ test("denial check runs before action-needed patterns", () => {
     "denied",
   );
 });
+
+// --- CEAC vocabulary (ROADMAP F5) -------------------------------------------
+// CEAC's status vocabulary (At NVC, In Transit, Ready, Administrative
+// Processing, Issued, Refused) is small and mostly maps cleanly onto the
+// existing classes — see docs/PLAN.md's CEAC status-mapping decision.
+
+test("classifyStatus: CEAC early-stage statuses read as pending", () => {
+  assert.equal(classifyStatus("At NVC"), "pending");
+  assert.equal(classifyStatus("Documents Received"), "pending");
+  assert.equal(classifyStatus("In Transit"), "pending");
+});
+
+test("classifyStatus: CEAC 'Administrative Processing' is a wait state, not a to-do", () => {
+  // The single most important CEAC mapping decision: this must NOT be
+  // actionNeeded — nothing has been asked of the applicant.
+  assert.equal(classifyStatus("Administrative Processing"), "inProgress");
+  assert.equal(classifyStatus("Ready"), "inProgress");
+});
+
+test("classifyStatus: CEAC terminal outcomes", () => {
+  assert.equal(classifyStatus("Issued"), "approved");
+  assert.equal(classifyStatus("Refused"), "denied");
+});

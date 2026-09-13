@@ -37,7 +37,7 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
   // would otherwise be claimed by the actionNeeded branch below and shown
   // as a to-do on a case that is already over.
   if (
-    /\b(denied|rejected|terminated|revoked|withdrawn|withdrawal|abandoned)\b/.test(s) ||
+    /\b(denied|rejected|terminated|revoked|withdrawn|withdrawal|abandoned|refused)\b/.test(s) ||
     /\bcase (was )?closed\b/.test(s)
   ) {
     return "denied";
@@ -53,7 +53,10 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
     /\b(card|document|notice) was (mailed|delivered|picked up)\b/.test(s) ||
     /\bwas picked up by the united states postal service\b/.test(s) ||
     /\bcase was (completed|resolved)\b/.test(s) ||
-    /\boath ceremony\b/.test(s)
+    /\boath ceremony\b/.test(s) ||
+    // CEAC's terminal-positive status word (visa printed and ready) — see
+    // docs/PLAN.md CEAC status mapping.
+    /\bissued\b/.test(s)
   ) {
     return "approved";
   }
@@ -89,7 +92,13 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
   // --- Just filed ----------------------------------------------------------
   // Before the broader inProgress patterns, since "Case Was Received" would
   // otherwise be claimed by a looser "received" match there.
-  if (/\b(case was (received|filed)|initial review)\b/.test(s)) {
+  if (
+    /\b(case was (received|filed)|initial review)\b/.test(s) ||
+    // CEAC's early-stage statuses — see docs/PLAN.md CEAC status mapping.
+    /\bat nvc\b/.test(s) ||
+    /\b(application|documents?) (was |were )?received\b/.test(s) ||
+    /\bin transit\b/.test(s)
+  ) {
     return "pending";
   }
 
@@ -100,7 +109,12 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
     /\b(transferred|reopened|reissued)\b/.test(s) ||
     /\b(being (actively )?reviewed|under review)\b/.test(s) ||
     /\b(ready to be scheduled|is being produced)\b/.test(s) ||
-    /\bfingerprint (fee|review)\b/.test(s)
+    /\bfingerprint (fee|review)\b/.test(s) ||
+    // CEAC: a genuine wait state, deliberately NOT actionNeeded — the user
+    // hasn't been asked to do anything, the case is just being worked.
+    // See docs/PLAN.md CEAC status mapping for why this distinction matters.
+    /\badministrative processing\b/.test(s) ||
+    /\bready\b/.test(s)
   ) {
     return "inProgress";
   }
