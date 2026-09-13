@@ -4,7 +4,7 @@ import { useTheme } from "@/lib/theme";
 interface ButtonProps extends Omit<PressableProps, "style" | "children"> {
   label: string;
   loading?: boolean;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
 }
 
 /**
@@ -17,9 +17,9 @@ export function Button({ label, loading, variant = "primary", disabled, ...props
   const { colors, spacing, radii, fontSize } = useTheme();
   const isDisabled = disabled || loading;
 
-  const bg = variant === "primary" ? colors.accent : variant === "secondary" ? colors.surfaceMuted : "transparent";
-  const fg = variant === "primary" ? colors.accentText : colors.text;
-  const borderColor = variant === "secondary" ? colors.border : "transparent";
+  const bg = variant === "primary" ? colors.accent : variant === "secondary" || variant === "danger" ? colors.surfaceMuted : "transparent";
+  const fg = variant === "primary" ? colors.accentText : variant === "danger" ? colors.danger : colors.text;
+  const borderColor = variant === "secondary" ? colors.border : variant === "danger" ? colors.danger : "transparent";
 
   return (
     <Pressable
@@ -31,7 +31,7 @@ export function Button({ label, loading, variant = "primary", disabled, ...props
         {
           backgroundColor: bg,
           borderColor,
-          borderWidth: variant === "secondary" ? 1 : 0,
+          borderWidth: variant === "secondary" || variant === "danger" ? 1 : 0,
           borderRadius: radii.md,
           paddingVertical: spacing.md,
           paddingHorizontal: spacing.lg,

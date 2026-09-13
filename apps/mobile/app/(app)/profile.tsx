@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import type { Database } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
-import { Button, Card, Input, Skeleton } from "@/components/ui";
+import { Button, Card, Input, ListRow, Skeleton } from "@/components/ui";
 import { AppHeader } from "@/components/AppHeader";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+// The web app hosts the actual legal text (see sign-in.tsx for the same
+// pattern) — one place to keep it accurate.
+const TERMS_URL = "https://simply-case-web.vercel.app/legal/terms";
+const PRIVACY_URL = "https://simply-case-web.vercel.app/legal/privacy";
 
 /** "" / null both mean "not set" in the UI; only a valid 0-23 integer is
  * sent to the database. Kept as strings while editing so the field can be
@@ -32,6 +38,7 @@ export default function ProfileScreen() {
   const [quietEnd, setQuietEnd] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +77,39 @@ export default function ProfileScreen() {
     setMessage(
       error ? { text: error.message, isError: true } : { text: "Saved.", isError: false },
     );
+  }
+
+  /**
+   * Two-step confirmation (Apple's account-deletion guidance expects this
+   * not to be a single accidental tap): a native Alert explaining exactly
+   * what happens, then the actual call. delete-account (unlike every other
+   * function in this project) IS JWT-verified — supabase-js's
+   * functions.invoke() automatically sends the current session's access
+   * token as the Authorization header, which is what the function checks.
+   */
+  function confirmDeleteAccount() {
+    Alert.alert(
+      "Delete your account?",
+      "This permanently deletes your account, your tracked cases, and your notification history. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete account", style: "destructive", onPress: handleDeleteAccount },
+      ],
+    );
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setMessage(null);
+    const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
+    if (error) {
+      setDeleting(false);
+      setMessage({ text: "Couldn't delete your account. Please try again.", isError: true });
+      return;
+    }
+    // The account is already gone server-side; signOut() just clears the
+    // now-invalid local session so the app returns to sign-in.
+    await signOut();
   }
 
   if (loading) {
@@ -142,7 +182,18 @@ export default function ProfileScreen() {
         )}
       </Card>
 
+      <View style={{ gap: spacing.sm }}>
+        <ListRow onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}>
+          <Text style={{ fontSize: fontSize.base, color: colors.text }}>Terms of Service</Text>
+        </ListRow>
+        <ListRow onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}>
+          <Text style={{ fontSize: fontSize.base, color: colors.text }}>Privacy Policy</Text>
+        </ListRow>
+      </View>
+
       <Button label="Sign out" variant="secondary" onPress={signOut} />
+
+      <Button label="Delete account" variant="danger" onPress={confirmDeleteAccount} loading={deleting} />
       </ScrollView>
     </View>
   );

@@ -64,6 +64,14 @@ function PasswordForm() {
         </Button>
       </form>
 
+      {mode === "signup" && (
+        <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+          By creating an account you agree to the{" "}
+          <Link href="/legal/terms" className="underline">Terms</Link> and{" "}
+          <Link href="/legal/privacy" className="underline">Privacy Policy</Link>.
+        </p>
+      )}
+
       {state.status === "error" && (
         <p role="status" className="mt-4 text-sm text-[var(--color-danger)]">
           {state.message}

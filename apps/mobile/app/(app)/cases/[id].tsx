@@ -110,6 +110,11 @@ export default function CaseDetailScreen() {
           ))}
         </View>
       )}
+
+      <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xl }}>
+        Not affiliated with USCIS or any government agency. Not legal
+        advice. Always confirm status on the official government site.
+      </Text>
     </ScrollView>
   );
 }
