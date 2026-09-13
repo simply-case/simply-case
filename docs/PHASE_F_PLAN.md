@@ -267,8 +267,7 @@ be built. Supabase's servers got Cloudflare 403s (ROADMAP → F0 table).
 
 Decisions already made (2026-09-13): data is kept **until the user deletes
 their account**; saving a priority date for the Visa Bulletin is OK.
-Contact email for the policies: **see "Open inputs" at the bottom** — use
-the value recorded there.
+Contact email: **placeholder** — see "Open inputs" at the bottom.
 
 ### Web pages
 
@@ -399,8 +398,9 @@ service; the user solves the CAPTCHA in an in-app WebView; both immigrant
 
 ### Verification limits — say this in the report
 
-There's no public CEAC test case, so the result-page extraction **can't be
-verified end to end** in this run unless the user has a real case number.
+There's no public CEAC test case. The user has a real one and will test
+after the run, so result-page extraction **can't be verified end to end
+during** the run.
 Build it, verify what can be verified (form loads in WebView, prefill,
 message bridge, RPC with a fake status against a throwaway account's CEAC
 case — after 0014 is applied, which is the user's step), and list the rest
@@ -421,5 +421,12 @@ as "needs a real case to test".
 
 ## Open inputs (fill before the run)
 
-- **Privacy/terms contact email:** _TBD by user_
-- **Real CEAC case available for F5 testing?** _TBD by user_
+- **Privacy/terms contact email:** the user will create a dedicated address
+  later. Use the literal placeholder `contact@REPLACE-BEFORE-LAUNCH.invalid`,
+  defined **once** (e.g. `apps/web/src/lib/legal.ts` exporting
+  `LEGAL_CONTACT_EMAIL`) and imported by both pages, so it's a one-line
+  change. List it in the report as a launch blocker.
+- **Real CEAC case for F5 testing:** the user has one and will test on
+  their phone **after** the run. Build F5 fully; mark result extraction
+  "awaiting user test". The user must never paste the case number into
+  chat — they type it into the app.
