@@ -5,7 +5,7 @@ import { useTheme } from "@/lib/theme";
 /**
  * Four-tab layout, the app's main navigation once signed in:
  * Cases (primary — its own nested stack, see cases/_layout.tsx) · News ·
- * More (placeholder for a not-yet-decided feature) · Profile.
+ * Resources (official USCIS/State links, ROADMAP Phase F1) · Profile.
  *
  * Icons are outline by default, filled when the tab is active — a small
  * but standard signal of "you are here" that costs nothing extra since
@@ -48,11 +48,11 @@ export default function AppTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="more"
+        name="resources"
         options={{
-          title: "More",
+          title: "Resources",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "grid" : "grid-outline"} size={size} color={color} />
+            <Ionicons name={focused ? "library" : "library-outline"} size={size} color={color} />
           ),
         }}
       />
