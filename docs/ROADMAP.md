@@ -397,3 +397,181 @@ precisely the blind spot poll_runs was built to close.
   real TestFlight gates are: Apple Developer account, a privacy policy URL
   (F8), and the domain/confirmation gate (Phase E) before any tester
   creates an account.
+
+---
+
+## Phase F build run (2026-09-13, Sonnet, executing docs/PHASE_F_PLAN.md)
+
+One branch per step, off `fix/cron-timeout` (not yet merged at run start —
+see that PR first). **No `git push` and no `supabase db push`/`config
+push` were run**, per the user's approval boundary; every migration and
+branch below is local only, waiting on the user.
+
+### Step 0 — polling fix + watchdog (`fix/polling-db-access`) — DONE, verify below
+
+- Switched `check-cases`/`send-notifications` from the auto-injected legacy
+  `SUPABASE_SERVICE_ROLE_KEY` to a new `SERVICE_SECRET_KEY` function secret
+  (set from the rotated `sb_secret_…` key, verified by SHA-256 digest).
+  **Deployed both functions.** This is confirmed to have fixed the
+  "Gateway Timeout on every DB call" outage — a run at 12:45 PT completed
+  with a real summary instead of timing out.
+- **A second, previously-unknown bug was found in the same investigation:**
+  the `USCIS_CLIENT_ID` function secret was stale (last updated 2026-09-11,
+  before the Part-4 credential rotation) while `USCIS_CLIENT_SECRET` was
+  the new one — a mismatched pair, causing every case-status call to fail
+  USCIS auth with `"kind":"unauthorized"`, even though the database access
+  itself was now fixed. **Fixed**: `USCIS_CLIENT_ID` reset to match
+  `.env.local`, verified by digest.
+- Migration 0012 (`fix/polling-db-access`, not applied): `ops_alerts` table
+  + `check_polling_health()` + a 30-min pg_cron job that emails the owner
+  if polling goes stale. Needs two Vault secrets after `db push`:
+  `resend_api_key`, `alert_email` (SQL in the migration's own comment).
+- **Waiting on the user:** push+merge this branch, `db push` migration
+  0012, then run the two `vault.create_secret(...)` calls in the SQL
+  editor (never via chat) to arm the watchdog.
+
+### F0b — GitHub Actions probe (`spike/gov-sources-probe`) — READY, not run
+
+`.github/workflows/probe-gov-sources.yml` added, `workflow_dispatch` +
+push-triggered. **Doesn't run until the user pushes this branch** — this
+session can't invoke GitHub Actions. Decides whether F2 (Visa Bulletin)
+and F3 (processing times) get built on Supabase, GitHub Actions, or
+skipped for the beta (the user's call if GitHub is also blocked).
+
+### F1 — Resources tab (`feature/resources-tab`) — DONE
+
+`more.tsx` renamed to `resources.tsx`, tab icon/title updated to
+"Resources". Real content, no placeholders: 5 official USCIS/State links
+opened in the in-app browser (Case Status, Processing Times, Visa
+Bulletin, CEAC status, NVC Timeframes). Web untouched (mobile is primary).
+
+### F4 — Real news (`feature/news`, migration 0013) — DONE, not deployed
+
+`supabase/functions/_shared/news.ts`: parsers for the Federal Register API
+and the USCIS newsroom listing. **Finding:** `uscis.gov/rss.xml` exists
+but is NOT a real newsroom feed (serves unrelated, mostly-stale site
+content — a 2015 form update showed up as the newest item) — rejected in
+favor of parsing the actual newsroom HTML, which the F0 spike already
+confirmed is reachable. 9 new tests against real recorded fixtures (6 real
+newsroom items, 3 real Federal Register documents, fetched 2026-09-13).
+Migration 0013 (`news_items` table + 3-hourly cron) not applied.
+`fetch-news` function written but **not deployed** (depends on the table).
+Mobile News tab rewritten to read real data with proper loading/empty/
+error states. **Waiting on the user:** `db push` 0013, then
+`supabase functions deploy fetch-news --no-verify-jwt --use-api`, then
+invoke once and check `news_items` has rows.
+
+### F8 — Legal + account deletion (`feature/legal-and-account-deletion`) — DONE
+
+`/legal/terms` + `/legal/privacy` (public web pages, verified live with
+`npm run dev` — 200, no auth redirect), a placeholder contact email
+(`apps/web/src/lib/legal.ts` — **launch blocker**, user is making a real
+one), "not affiliated / not legal advice" disclaimers on case detail
+(web + mobile), terms/privacy links at signup, and Profile now has real
+Terms/Privacy rows. **`delete-account` function deployed** (WITH JWT
+verification, unlike every cron function) and verified end-to-end against
+a disposable throwaway account signed up through the real API.
+
+**⚠️ Incident during that verification:** the test used case key
+`EAC9999103400` — one of the project's 3 canonical sandbox test
+receipts — instead of a made-up one. Its `tracked_cases` row got deleted
+as "orphaned" (zero subscribers at the time). Available evidence (it had
+already stopped being claimed by `check-cases`, consistent with its error
+count having hit the circuit-breaker cap during the outage) suggests it
+was already an orphan before the test, not something the owner was
+actively subscribed to — but this can't be proven retroactively, and the
+delete is irreversible. It's a stable, freely-re-addable USCIS sandbox
+test number, not real data. **Lesson recorded in HANDOFF.md's "lessons
+learned":** verify a destructive function against a case_key that can
+never collide with a real one.
+
+### F5 — NVC/CEAC refresh (`feature/ceac-refresh`, migration 0014) — DONE, not applied
+
+`normalizeCeacCaseKey`/`parseCeacCaseKey` (shared), `classifyStatus`
+extended with CEAC's vocabulary (13 status tests pass, 3 new, no
+regressions), migration 0014's `record_ceac_status()` RPC (not applied),
+mobile add-case now offers all 3 case types, and a new WebView refresh
+screen. **Verification limit, stated plainly:** there was no live CEAC
+case available during this run, so the result page's structure is
+unverified — the screen's reliable path is a row of one-tap buttons for
+CEAC's documented statuses, with a best-effort automatic-detection script
+as a bonus, not a dependency. The user has a real case and will test this
+on their phone after the migration is applied.
+
+### Not touched this run
+
+F2 (Visa Bulletin), F3 (processing times) — gated on F0b. F6 (range
+search) — gated on USCIS production access. F7 (push) — gated on the
+Apple Developer account. Phase E (domain/confirmations).
+
+### Everything currently waiting on the user, in order
+
+1. Push + merge `fix/cron-timeout`, then `fix/polling-db-access`,
+   `feature/resources-tab`, `feature/news`,
+   `feature/legal-and-account-deletion`, `feature/ceac-refresh`.
+2. `supabase db push` for migrations 0012, 0013, 0014 (review each diff
+   first, per the standing rule).
+3. Deploy `fetch-news` (needs 0013 first) and invoke it once.
+4. Set the two watchdog Vault secrets (needs 0012 first).
+5. Push `spike/gov-sources-probe`, run the Action, report the table back,
+   decide F2/F3's fate.
+6. Set a real `LEGAL_CONTACT_EMAIL` in `apps/web/src/lib/legal.ts` before
+   any real beta tester signs up.
+7. Test the CEAC refresh screen on a real case (after 0014 is applied).
+8. Optionally re-add `EAC9999103400` if its loss is missed.
+
+---
+
+## Phase F build run — follow-up review and fixes (2026-09-13, later)
+
+Before the user tested anything, the branches above were reviewed again
+and found to have 4 real bugs, all fixed before testing began:
+
+1. **CEAC saving would have failed on every call.** `case_status_events`
+   only allowed `source in ('api_history', 'poll')`; `record_ceac_status()`
+   inserted `'ceac_refresh'`. Fixed by widening the constraint in
+   migration 0014 itself (not yet applied, so no separate fix migration
+   needed).
+2. **`classifyStatus()` misclassified real USCIS text.** The CEAC
+   additions matched `"issued"`/`"ready"` as bare substrings, so "Notice
+   of Intent to Deny Was Issued" read as `approved`. Fixed by exact-
+   matching CEAC's short fixed vocabulary before any substring pattern
+   runs; regression test added using that exact sentence.
+3. **CEAC auto-detection never ran on the result page** — it only
+   injected once, at initial load, and the CEAC form posts back to the
+   same URL rather than navigating, so the original
+   `onNavigationStateChange` comment's premise was wrong regardless.
+   Fixed with `onLoadEnd` + a load counter that skips the first (form)
+   page.
+4. **The polling watchdog (0012) had a blind spot**: it only checked for
+   stale-but-still-active cases, but a case that hits 10 consecutive
+   errors is excluded from `claim_due_cases` entirely and can never look
+   "stale" again — so the watchdog would stay silent forever on exactly
+   the case most worth alerting on. Added a second, independently-
+   throttled "circuit-broken" check.
+
+**The Gateway Timeout was investigated properly** with a throwaway
+diagnostic function (deployed, tested, deleted, never committed) rather
+than left as "probably Supabase's fault": 18 isolated database calls from
+inside an Edge Function all succeeded fast. The one thing those never
+exercised — a real call, a multi-second wait on USCIS, then another call —
+produced one clearly slower response when tested, though not a
+reliably-reproducible hard failure. Consistent with (not proven to be) a
+pooled connection going stale during the USCIS wait. Mitigated with a
+one-retry wrapper around every database write that follows a USCIS call
+in `check-cases`; deployed and confirmed working via the exact
+`net.http_post` path pg_cron uses.
+
+**All 7 branches with real changes, plus the 2 already-pushed docs
+branches, were combined into one local branch (`test/all-features`) for
+one combined manual test pass**, per the user's choice to ship this as a
+single PR rather than 7 separate ones. All 61 tests pass, typecheck is
+clean, and the web app was booted locally to confirm `/legal/terms` and
+`/legal/privacy` both return 200 logged out.
+
+**Still true and unresolved:** `EAC9999103403` is circuit-broken (10
+errors) and `LIN9999106498` is at 8 — neither has been reset, since
+that's a production data write left for the user to approve. USCIS's
+sandbox is currently returning "unavailable" on at least one case, so the
+"weekend traffic works" finding from earlier today should not yet be
+treated as settled.

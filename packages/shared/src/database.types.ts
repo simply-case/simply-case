@@ -231,6 +231,64 @@ export type Database = {
         }
         Relationships: []
       }
+      // Hand-patched for migration 0012 (not yet applied to production) —
+      // regenerate with `npm run db:types` after `supabase db push`.
+      ops_alerts: {
+        Row: {
+          detail: Json | null
+          id: string
+          kind: string
+          sent_at: string
+        }
+        Insert: {
+          detail?: Json | null
+          id?: string
+          kind: string
+          sent_at?: string
+        }
+        Update: {
+          detail?: Json | null
+          id?: string
+          kind?: string
+          sent_at?: string
+        }
+        Relationships: []
+      }
+      // Hand-patched for migration 0013 (not yet applied to production) —
+      // regenerate with `npm run db:types` after `supabase db push`.
+      news_items: {
+        Row: {
+          external_id: string
+          fetched_at: string
+          id: string
+          published_at: string
+          source: string
+          summary: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          external_id: string
+          fetched_at?: string
+          id?: string
+          published_at: string
+          source: string
+          summary?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          external_id?: string
+          fetched_at?: string
+          id?: string
+          published_at?: string
+          source?: string
+          summary?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -455,6 +513,16 @@ export type Database = {
       }
     }
     Functions: {
+      // Hand-patched for migration 0014 (not yet applied to production) —
+      // regenerate with `npm run db:types` after `supabase db push`.
+      record_ceac_status: {
+        Args: {
+          p_status_detail?: string
+          p_status_text: string
+          p_user_case_id: string
+        }
+        Returns: undefined
+      }
       add_case: {
         Args: {
           p_case_key: string

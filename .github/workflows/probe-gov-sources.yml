@@ -1,0 +1,71 @@
+name: Probe government data sources
+
+# Throwaway diagnostic — see docs/ROADMAP.md "Phase F build run" and
+# docs/PHASE_F_PLAN.md F0b. Checks whether the same 5 government URLs that
+# returned Cloudflare 403s from Supabase's edge (F0 spike, 2026-09-12) are
+# reachable from GitHub's runners instead. Decides whether the Visa
+# Bulletin / processing-times fetchers (F2/F3) can run as a GitHub Action.
+#
+# workflow_dispatch so it can be run on demand from the Actions tab, and
+# push-to-this-branch so it runs automatically once this is pushed. No
+# secrets used, no writes anywhere — read-only probe, safe to delete after.
+on:
+  workflow_dispatch:
+  push:
+    branches: [spike/gov-sources-probe]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe each source and report status codes
+        run: |
+          set -u
+          UA="SimplyCase-Probe/0.1 (+https://github.com/simply-case/simply-case)"
+
+          # Plain indexed arrays, not `declare -A` — associative arrays
+          # need bash 4+, and this script was drafted/tested against
+          # macOS's default bash (3.2, no associative-array support) to
+          # catch exactly this kind of portability bug locally rather than
+          # discovering it only on a runner.
+          names=(bulletin_index bulletin_sep_2026 nvc_timeframes uscis_processing_forms uscis_news federal_register)
+          urls=(
+            "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html"
+            "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin/2026/visa-bulletin-for-september-2026.html"
+            "https://travel.state.gov/content/travel/en/us-visas/immigrate/nvc-timeframes.html"
+            "https://egov.uscis.gov/processing-times/api/formtypes"
+            "https://www.uscis.gov/news/all-news"
+            "https://www.federalregister.gov/api/v1/documents.json?per_page=1&conditions[agencies][]=u-s-citizenship-and-immigration-services"
+          )
+
+          {
+            echo "## Government source probe results"
+            echo
+            echo "Run from a GitHub-hosted runner — compare against the"
+            echo "2026-09-12 Supabase Edge probe in docs/ROADMAP.md (F0)."
+            echo
+            echo "| Source | HTTP status | Cloudflare challenge? | Bytes |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for i in "${!names[@]}"; do
+            name="${names[$i]}"
+            url="${urls[$i]}"
+            body_file=$(mktemp)
+            code=$(curl -sL -m 20 -o "$body_file" -w '%{http_code}' \
+              -H "User-Agent: $UA" \
+              -H "Accept: text/html,application/json;q=0.9,*/*;q=0.8" \
+              "$url" || echo "curl_error")
+            bytes=$(wc -c < "$body_file" | tr -d ' ')
+            challenge="no"
+            if grep -qiE "Attention Required|cf-chl|Just a moment" "$body_file"; then
+              challenge="yes"
+            fi
+            echo "| $name | $code | $challenge | $bytes |" >> "$GITHUB_STEP_SUMMARY"
+            rm -f "$body_file"
+          done
+
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "**Reading this:** 200 with \"Cloudflare challenge? no\" means" >> "$GITHUB_STEP_SUMMARY"
+          echo "reachable. 403 or a challenge page means blocked here too —" >> "$GITHUB_STEP_SUMMARY"
+          echo "per docs/PHASE_F_PLAN.md, that means skip F2/F3 for the beta." >> "$GITHUB_STEP_SUMMARY"

@@ -26,9 +26,32 @@ import type { StatusClass } from "./theme";
  * wider list of commonly-seen USCIS statuses; anything unmatched degrades
  * to `unknown` by design rather than by omission.
  */
+/**
+ * CEAC's entire status vocabulary is this short, fixed list of exact
+ * words/phrases (see ROADMAP F5) — never embedded in a longer sentence the
+ * way USCIS text is. Checked as an EXACT match, first, before any of the
+ * substring patterns below: an earlier version tried to fold "issued" and
+ * "ready" into the substring patterns as bare words, and that
+ * misclassified real USCIS text containing those words as substrings —
+ * "Notice of Intent to Deny Was Issued" read as `approved`, the worst kind
+ * of mistake this function can make. Exact-matching the known CEAC strings
+ * here means they can never collide with USCIS's much longer sentences.
+ */
+const CEAC_STATUS_CLASS: Record<string, StatusClass> = {
+  "at nvc": "pending",
+  "in transit": "pending",
+  ready: "inProgress",
+  "administrative processing": "inProgress",
+  issued: "approved",
+  refused: "denied",
+};
+
 export function classifyStatus(statusText: string | null | undefined): StatusClass {
   if (!statusText) return "unknown";
   const s = statusText.toLowerCase();
+
+  const exact = CEAC_STATUS_CLASS[s.trim()];
+  if (exact) return exact;
 
   // --- Terminal negative outcomes -----------------------------------------
   // First, because a denial/closure notice frequently also names the thing
@@ -89,7 +112,10 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
   // --- Just filed ----------------------------------------------------------
   // Before the broader inProgress patterns, since "Case Was Received" would
   // otherwise be claimed by a looser "received" match there.
-  if (/\b(case was (received|filed)|initial review)\b/.test(s)) {
+  if (
+    /\b(case was (received|filed)|initial review)\b/.test(s) ||
+    /\b(application|documents?) (was |were )?received\b/.test(s)
+  ) {
     return "pending";
   }
 

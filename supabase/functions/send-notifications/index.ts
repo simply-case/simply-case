@@ -115,7 +115,10 @@ Deno.serve(async (req: Request) => {
     // no/non-JSON body -> default batch size
   }
 
-  const db = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+  // SERVICE_SECRET_KEY, not the legacy SUPABASE_SERVICE_ROLE_KEY — see the
+  // matching comment in check-cases/index.ts and docs/HANDOFF.md "Polling
+  // outage, 2026-09-12". No fallback to the legacy key on purpose.
+  const db = createClient(requireEnv("SUPABASE_URL"), requireEnv("SERVICE_SECRET_KEY"), {
     auth: { persistSession: false },
   });
   const resendApiKey = requireEnv("RESEND_API_KEY");

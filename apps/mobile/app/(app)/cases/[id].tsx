@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import type { Database } from "@mycasepro/shared";
+import { router, useLocalSearchParams } from "expo-router";
+import { displayCaseKey, type Database } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
-import { Card, EmptyState, Skeleton, StatusPill } from "@/components/ui";
+import { Button, Card, EmptyState, Skeleton, StatusPill } from "@/components/ui";
 
 type CaseRow = Database["public"]["Views"]["my_case_details"]["Row"];
 type EventRow = Database["public"]["Views"]["my_case_events"]["Row"];
@@ -68,7 +68,7 @@ export default function CaseDetailScreen() {
         {caseDetail.nickname || caseDetail.case_key}
       </Text>
       <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs, textTransform: "uppercase" }}>
-        {caseDetail.provider} · {caseDetail.case_key}
+        {caseDetail.provider} · {displayCaseKey(caseDetail.case_key ?? "")}
         {caseDetail.form_type ? ` · ${caseDetail.form_type}` : ""}
       </Text>
 
@@ -80,10 +80,26 @@ export default function CaseDetailScreen() {
         {caseDetail.status_detail_en && (
           <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>{caseDetail.status_detail_en}</Text>
         )}
-        {caseDetail.last_checked_at && (
-          <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs }}>
-            Last checked {new Date(caseDetail.last_checked_at).toLocaleString()}
-          </Text>
+        {caseDetail.provider === "ceac" ? (
+          <>
+            <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs }}>
+              {caseDetail.last_checked_at
+                ? `Last refreshed ${new Date(caseDetail.last_checked_at).toLocaleString()}`
+                : "Never refreshed"}
+              {" · "}updates only when you refresh
+            </Text>
+            <Button
+              label="Refresh from State Department"
+              variant="secondary"
+              onPress={() => router.push(`/cases/ceac-refresh/${caseDetail.tracked_case_id}`)}
+            />
+          </>
+        ) : (
+          caseDetail.last_checked_at && (
+            <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs }}>
+              Last checked {new Date(caseDetail.last_checked_at).toLocaleString()}
+            </Text>
+          )
         )}
       </Card>
 
@@ -110,6 +126,11 @@ export default function CaseDetailScreen() {
           ))}
         </View>
       )}
+
+      <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xl }}>
+        Not affiliated with USCIS or any government agency. Not legal
+        advice. Always confirm status on the official government site.
+      </Text>
     </ScrollView>
   );
 }

@@ -1,81 +1,118 @@
-import { ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { FlatList, RefreshControl, Text, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import type { Database } from "@mycasepro/shared";
+import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
-import { Card } from "@/components/ui";
+import { EmptyState, ListRow, Skeleton } from "@/components/ui";
 import { AppHeader } from "@/components/AppHeader";
 
-/**
- * Immigration news/articles tab.
- *
- * PLACEHOLDER CONTENT: no real source is wired up yet. Picking one is a
- * separate decision with real tradeoffs — a licensed news API (cost,
- * terms), an RSS feed (e.g. the USCIS newsroom, EOIR/DOJ press releases —
- * free, but per-source parsing and no guaranteed uptime), or hand-curated
- * posts (full control, ongoing manual work). None of those has been
- * chosen, so this renders realistic-looking sample cards to validate the
- * screen's layout, NOT real headlines — do not ship this as-is.
- *
- * When a source is picked: replace SAMPLE_ARTICLES with a real fetch
- * (likely a `news_articles` table populated by a scheduled function,
- * mirroring the check-cases/poll_runs pattern, or a direct client fetch
- * of an RSS feed via a small Edge Function to avoid CORS).
- */
-const SAMPLE_ARTICLES = [
-  {
-    id: "1",
-    source: "USCIS Newsroom",
-    date: "Sample date",
-    title: "USCIS Announces Updated Processing Times for Form I-485",
-    summary: "Placeholder summary text standing in for a real article excerpt.",
-  },
-  {
-    id: "2",
-    source: "EOIR",
-    date: "Sample date",
-    title: "Executive Office for Immigration Review Issues Policy Update",
-    summary: "Placeholder summary text standing in for a real article excerpt.",
-  },
-  {
-    id: "3",
-    source: "USCIS Newsroom",
-    date: "Sample date",
-    title: "Fee Schedule Changes Take Effect for Select Petition Types",
-    summary: "Placeholder summary text standing in for a real article excerpt.",
-  },
-];
+type NewsRow = Database["public"]["Tables"]["news_items"]["Row"];
 
+const SOURCE_LABEL: Record<string, string> = {
+  federal_register: "Federal Register",
+  uscis_newsroom: "USCIS Newsroom",
+};
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Real immigration news (ROADMAP Phase F4), replacing the placeholder
+ * sample cards. Reads from news_items, populated on a schedule by the
+ * fetch-news Edge Function (supabase/functions/fetch-news) — never fetched
+ * directly from the client, so a dead upstream feed can't break this
+ * screen and there's no way for junk to reach it unfiltered.
+ *
+ * Before migration 0013 is applied to production this query will fail;
+ * the error state below handles that the same as any other real failure
+ * rather than falling back to fake data.
+ */
 export default function NewsScreen() {
   const { colors, spacing, fontSize } = useTheme();
+  const [items, setItems] = useState<NewsRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadNews = useCallback(async () => {
+    const { data, error: fetchError } = await supabase
+      .from("news_items")
+      .select("*")
+      .order("published_at", { ascending: false })
+      .limit(50);
+    if (fetchError) {
+      setError(fetchError.message);
+      return;
+    }
+    setError(null);
+    setItems(data ?? []);
+  }, []);
+
+  useEffect(() => {
+    loadNews().finally(() => setLoading(false));
+  }, [loadNews]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadNews();
+    setRefreshing(false);
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader />
-      <ScrollView
-        style={{ flex: 1, backgroundColor: colors.bg }}
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.md }}
-      >
-      <View
-        style={{
-          backgroundColor: colors.surfaceMuted,
-          borderRadius: 8,
-          padding: spacing.sm,
-          marginBottom: spacing.sm,
-        }}
-      >
-        <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-          Sample layout — a real news source hasn&apos;t been picked yet.
-        </Text>
-      </View>
 
-      {SAMPLE_ARTICLES.map((article) => (
-        <Card key={article.id} style={{ gap: spacing.xs }}>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, textTransform: "uppercase" }}>
-            {article.source} · {article.date}
-          </Text>
-          <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.text }}>{article.title}</Text>
-          <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>{article.summary}</Text>
-        </Card>
-      ))}
-      </ScrollView>
+      {loading ? (
+        <View style={{ padding: spacing.lg, gap: spacing.md }}>
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={{ gap: spacing.xs }}>
+              <Skeleton style={{ height: 12, width: "40%" }} />
+              <Skeleton style={{ height: 18, width: "85%" }} />
+              <Skeleton style={{ height: 14, width: "95%" }} />
+            </View>
+          ))}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, justifyContent: "center" }}>
+          <EmptyState
+            title="Couldn't load news"
+            message="Something went wrong fetching the latest updates. Pull down to try again."
+          />
+        </View>
+      ) : items.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: "center" }}>
+          <EmptyState
+            title="No news yet"
+            message="Check back soon — this updates automatically every few hours."
+          />
+        </View>
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.md }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}
+          renderItem={({ item }) => (
+            <ListRow onPress={() => WebBrowser.openBrowserAsync(item.url)} accessibilityLabel={item.title}>
+              <View style={{ gap: spacing.xs }}>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, textTransform: "uppercase" }}>
+                  {SOURCE_LABEL[item.source] ?? item.source} · {formatDate(item.published_at)}
+                </Text>
+                <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.text }}>
+                  {item.title}
+                </Text>
+                {item.summary && (
+                  <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }} numberOfLines={3}>
+                    {item.summary}
+                  </Text>
+                )}
+              </View>
+            </ListRow>
+          )}
+        />
+      )}
     </View>
   );
 }

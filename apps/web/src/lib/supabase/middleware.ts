@@ -7,7 +7,7 @@ import type { Database } from "@mycasepro/shared";
 // session — so by the time the user lands on /reset-password they are
 // authenticated, and anyone reaching it without a session should be sent
 // to /login rather than shown a password form that can't work.
-const PUBLIC_PATHS = ["/login", "/auth/confirm", "/forgot-password"];
+const PUBLIC_PATHS = ["/login", "/auth/confirm", "/forgot-password", "/legal"];
 
 /**
  * Refreshes the Supabase session cookie on every request and redirects
