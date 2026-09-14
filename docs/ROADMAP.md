@@ -33,10 +33,18 @@ federal agency. It runs in the background across everything else.
 
 External clock. Nothing else depends on it, so it must not wait.
 
-**Status 2026-09-12:** not yet eligible — still accumulating the 5
-consecutive days of sandbox traffic. A3's cron query is fixed and was run
-(92 runs, all 'succeeded'), but A4 is unresolved, so no days should be
-counted as credited yet.
+**Status 2026-09-12 (late):** not yet eligible. Two findings change how
+to count days:
+- The user saw sandbox traffic succeeding on the **weekend**, so the
+  documented Mon–Fri window (A4/A5's premise) looks wrong. Weekends likely
+  count, but confirm with USCIS rather than assume.
+- **A polling outage was found and fixed** (migration 0011): pg_net's
+  5-second default timeout was cutting off most cron calls, so many
+  "successful" runs never actually checked a case. See HANDOFF.md →
+  "Polling outage, 2026-09-12". Count the streak from `poll_runs.updated`
+  per day, starting no earlier than the fix.
+- Polling was **temporarily** sped up to every 14 min for more traffic.
+  Revert after production access (SQL in HANDOFF.md).
 
 - [ ] **A1.** Verify the current production-access requirements on the USCIS
       developer portal. The "5 consecutive days of sandbox traffic" rule is
@@ -114,14 +122,14 @@ Six items. Only B1 and B2 are new code; the rest is recorded cleanup.
       password without knowing the old one and lock the owner out. Config
       flag, not code. ⚠️ `supabase config diff` FIRST — config.toml has
       previously drifted 20 fields from production.
-- [ ] **B4. Rotate three credentials** — Supabase secret key, Resend API
+- [x] **B4. Rotate three credentials** (done 2026-09-12) — Supabase secret key, Resend API
       key, USCIS client secret. All three were printed to chat transcripts
       (never to git) and are still live. Procedure and post-rotation steps
       are in HANDOFF.md. Run `bash scripts/check-env.sh` after.
 - [ ] **B5. Dependabot** — config added (`.github/dependabot.yml`), but the
       2 moderate vulnerabilities are still open on `main` and 7 Dependabot
       PRs await triage (see HANDOFF.md item 10).
-- [ ] **B6. Delete `admin@mycasepro.test`** — password `admin123`, on the
+- [x] **B6. Delete `admin@mycasepro.test`** (done 2026-09-12) — password `admin123`, on the
       production database. Note: this is currently the only account with a
       working password login, so do this only after confirming the owner
       account can sign in via forgot-password.
@@ -154,7 +162,7 @@ states, and never making a pending status *look* like bad news.
 - [ ] **C5. States.** Empty, loading (skeletons, not spinners), error,
       offline. Empty/loading/error done; **offline handling does not exist
       in either app yet** (checked 2026-09-12).
-- [ ] **C6. Deep-link click-test on a real device.** Flagged in HANDOFF.md
+- [x] **C6. Deep-link click-test on a real device.** Passed 2026-09-12 after fixing a missed-link bug (PR #16). Flagged in HANDOFF.md
       as never fully verified. Use `npx expo start --go --tunnel` — plain
       `--go` binds localhost, which a phone cannot reach.
 
@@ -196,7 +204,7 @@ Full reasoning, rejected alternatives, and the Cloudflare evidence are in
 
 **F0 gates F2, F3 and F4 — do it first.**
 
-- [ ] **F0. Cloudflare spike (~20 min).** Throwaway edge function that fetches
+- [x] **F0. Cloudflare spike (~20 min).** **Ran 2026-09-12. Result below.** Throwaway edge function that fetches
       the *real production URLs* (a specific monthly bulletin page, the NVC
       timeframes page, the processing-times API endpoint) and returns status
       codes. No DB writes, no migration, no config push. Delete after.
@@ -204,6 +212,21 @@ Full reasoning, rejected alternatives, and the Cloudflare evidence are in
       specific deploy. **200 → build crons on Supabase. 403 → move the
       fetchers to a scheduled GitHub Action** (free, repo is public).
       Either way: a 403 at runtime must alert, not crash.
+
+      **Result (from Supabase Edge, run twice, function deleted after):**
+
+      | Source | Status |
+      |---|---|
+      | travel.state.gov visa bulletin (index, Sep 2026, Oct 2026) | **403** Cloudflare challenge |
+      | travel.state.gov NVC timeframes | **403** Cloudflare challenge |
+      | egov.uscis.gov processing-times API | **403** Cloudflare challenge |
+      | uscis.gov newsroom | 200 |
+      | federalregister.gov API | 200 |
+
+      So **F4 (news) can run on Supabase as planned. F2 and F3 cannot.**
+      The GitHub Actions fallback is **untested**: GitHub runners are also
+      datacenter (Azure) IPs and may be blocked the same way. **F0b: repeat
+      the probe from a GitHub Action before building F2/F3 on it.**
 
 - [ ] **F1. Rename the `More` tab to `Resources`** and give it a real index
       (Visa Bulletin · Processing Times · Range Search). Cheap, unblocks
@@ -355,3 +378,22 @@ Worth knowing what that 'succeeded' actually means: pg_cron ran
 nothing about the HTTP status the function returned. A function failing
 on every invocation would still read 'succeeded' here — which is
 precisely the blind spot poll_runs was built to close.
+
+---
+
+## Session log (2026-09-12, evening)
+
+- **Merged:** PR #14 (docs refresh), #15 ("Simply Case" in all
+  user-visible strings), #16 (mobile reset-link fix, verified on device).
+- **Credentials:** all three rotated; Edge Function secrets verified by
+  digest. Test accounts removed — exactly one account remains.
+- **F0 spike:** done; results in Phase F above.
+- **Polling:** temporarily 14-min interval; **5-second pg_net timeout
+  outage found and fixed** with migration 0011 (pushed).
+- **Folder rename** to `personal-projects` (removes the space that broke
+  local iOS builds).
+- **Correction to earlier advice:** the folder rename was never a
+  TestFlight blocker. TestFlight builds come from EAS cloud builds. The
+  real TestFlight gates are: Apple Developer account, a privacy policy URL
+  (F8), and the domain/confirmation gate (Phase E) before any tester
+  creates an account.
