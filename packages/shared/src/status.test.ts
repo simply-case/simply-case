@@ -121,3 +121,16 @@ test("classifyStatus: CEAC terminal outcomes", () => {
   assert.equal(classifyStatus("Issued"), "approved");
   assert.equal(classifyStatus("Refused"), "denied");
 });
+
+test("CEAC's exact words don't collide with USCIS sentences that contain them", () => {
+  // Regression: an earlier version matched "issued" and "ready" as bare
+  // substrings, which misclassified real USCIS text as approved/inProgress
+  // even though it means the opposite. Found 2026-09-13 by testing real
+  // USCIS phrasing against the CEAC additions before shipping them.
+  assert.equal(classifyStatus("Notice of Intent to Deny Was Issued"), "actionNeeded");
+  assert.equal(classifyStatus("Request for Evidence Was Issued"), "actionNeeded");
+  // Doesn't match any specific pattern (it's constructed text, not a real
+  // USCIS status) — "unknown" here is correct per this function's own
+  // bias-toward-unknown design, not a gap this test is asking to close.
+  assert.equal(classifyStatus("Your Case Is Ready For Interview Scheduling"), "unknown");
+});

@@ -26,9 +26,32 @@ import type { StatusClass } from "./theme";
  * wider list of commonly-seen USCIS statuses; anything unmatched degrades
  * to `unknown` by design rather than by omission.
  */
+/**
+ * CEAC's entire status vocabulary is this short, fixed list of exact
+ * words/phrases (see ROADMAP F5) — never embedded in a longer sentence the
+ * way USCIS text is. Checked as an EXACT match, first, before any of the
+ * substring patterns below: an earlier version tried to fold "issued" and
+ * "ready" into the substring patterns as bare words, and that
+ * misclassified real USCIS text containing those words as substrings —
+ * "Notice of Intent to Deny Was Issued" read as `approved`, the worst kind
+ * of mistake this function can make. Exact-matching the known CEAC strings
+ * here means they can never collide with USCIS's much longer sentences.
+ */
+const CEAC_STATUS_CLASS: Record<string, StatusClass> = {
+  "at nvc": "pending",
+  "in transit": "pending",
+  ready: "inProgress",
+  "administrative processing": "inProgress",
+  issued: "approved",
+  refused: "denied",
+};
+
 export function classifyStatus(statusText: string | null | undefined): StatusClass {
   if (!statusText) return "unknown";
   const s = statusText.toLowerCase();
+
+  const exact = CEAC_STATUS_CLASS[s.trim()];
+  if (exact) return exact;
 
   // --- Terminal negative outcomes -----------------------------------------
   // First, because a denial/closure notice frequently also names the thing
@@ -37,7 +60,7 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
   // would otherwise be claimed by the actionNeeded branch below and shown
   // as a to-do on a case that is already over.
   if (
-    /\b(denied|rejected|terminated|revoked|withdrawn|withdrawal|abandoned|refused)\b/.test(s) ||
+    /\b(denied|rejected|terminated|revoked|withdrawn|withdrawal|abandoned)\b/.test(s) ||
     /\bcase (was )?closed\b/.test(s)
   ) {
     return "denied";
@@ -53,10 +76,7 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
     /\b(card|document|notice) was (mailed|delivered|picked up)\b/.test(s) ||
     /\bwas picked up by the united states postal service\b/.test(s) ||
     /\bcase was (completed|resolved)\b/.test(s) ||
-    /\boath ceremony\b/.test(s) ||
-    // CEAC's terminal-positive status word (visa printed and ready) — see
-    // docs/PLAN.md CEAC status mapping.
-    /\bissued\b/.test(s)
+    /\boath ceremony\b/.test(s)
   ) {
     return "approved";
   }
@@ -94,10 +114,7 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
   // otherwise be claimed by a looser "received" match there.
   if (
     /\b(case was (received|filed)|initial review)\b/.test(s) ||
-    // CEAC's early-stage statuses — see docs/PLAN.md CEAC status mapping.
-    /\bat nvc\b/.test(s) ||
-    /\b(application|documents?) (was |were )?received\b/.test(s) ||
-    /\bin transit\b/.test(s)
+    /\b(application|documents?) (was |were )?received\b/.test(s)
   ) {
     return "pending";
   }
@@ -109,12 +126,7 @@ export function classifyStatus(statusText: string | null | undefined): StatusCla
     /\b(transferred|reopened|reissued)\b/.test(s) ||
     /\b(being (actively )?reviewed|under review)\b/.test(s) ||
     /\b(ready to be scheduled|is being produced)\b/.test(s) ||
-    /\bfingerprint (fee|review)\b/.test(s) ||
-    // CEAC: a genuine wait state, deliberately NOT actionNeeded — the user
-    // hasn't been asked to do anything, the case is just being worked.
-    // See docs/PLAN.md CEAC status mapping for why this distinction matters.
-    /\badministrative processing\b/.test(s) ||
-    /\bready\b/.test(s)
+    /\bfingerprint (fee|review)\b/.test(s)
   ) {
     return "inProgress";
   }

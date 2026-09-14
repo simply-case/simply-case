@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { router, useLocalSearchParams } from "expo-router";
@@ -29,16 +29,21 @@ const COMMON_STATUSES = [
 ] as const;
 
 /**
- * Injected into the CEAC page. Best-effort automatic status extraction:
- * scans the page's visible text for one of the known status words and
- * posts it back if found. Deliberately does NOT try to click through the
- * CAPTCHA or the form — the user does that themselves. Wrapped so a
- * missing/changed DOM never throws inside the WebView.
+ * Injected into the CEAC page after every load PAST the first one (see
+ * onLoadEnd below — the initial form page is deliberately skipped, since
+ * it may itself list these status words as a legend/key, which would
+ * misfire before the user has even submitted anything). Best-effort
+ * automatic status extraction: scans the page's visible text for one of
+ * the known status words and posts it back if found. Deliberately does
+ * NOT try to click through the CAPTCHA or the form — the user does that
+ * themselves. Wrapped so a missing/changed DOM never throws inside the
+ * WebView.
  *
  * NOT verified against a live result page as of writing (no real CEAC
  * case was available) — treat this purely as a convenience that may
- * silently find nothing, never as the thing this screen depends on. The
- * manual buttons above are what actually works regardless.
+ * silently find nothing, or even fire on the wrong page, never as the
+ * thing this screen depends on. The manual buttons above are what
+ * actually works regardless.
  */
 const EXTRACTION_SCRIPT = `
 (function () {
@@ -73,6 +78,8 @@ export default function CeacRefreshScreen() {
   const [detectedStatus, setDetectedStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const webViewRef = useRef<WebView>(null);
+  const loadCountRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,8 +161,8 @@ export default function CeacRefreshScreen() {
 
         <View style={{ height: 420, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: colors.border }}>
           <WebView
+            ref={webViewRef}
             source={{ uri: CEAC_URL }}
-            injectedJavaScript={EXTRACTION_SCRIPT}
             onMessage={(event) => {
               try {
                 const data = JSON.parse(event.nativeEvent.data);
@@ -166,10 +173,18 @@ export default function CeacRefreshScreen() {
                 // Not our message shape — ignore.
               }
             }}
-            onNavigationStateChange={() => {
-              // Re-run the scan after every navigation inside the WebView
-              // (e.g. after the user submits the form) — a single injection
-              // at initial load would miss the result page entirely.
+            onLoadEnd={() => {
+              // CEAC's form posts back to the same URL rather than
+              // navigating to a new one, so onNavigationStateChange (which
+              // watches for URL changes) would miss the result entirely —
+              // onLoadEnd fires on every full page load, postback included.
+              // loadCount starts at 0 for the initial form page; only
+              // re-inject from the second load onward (see EXTRACTION_SCRIPT
+              // comment above for why the first load is skipped).
+              if (loadCountRef.current > 0) {
+                webViewRef.current?.injectJavaScript(EXTRACTION_SCRIPT);
+              }
+              loadCountRef.current += 1;
             }}
           />
         </View>

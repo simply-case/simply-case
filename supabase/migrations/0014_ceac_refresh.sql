@@ -16,6 +16,16 @@
 -- separate column, so nothing else in the schema (claim_due_cases, the
 -- my_case_* views) needs to know CEAC is special-shaped.
 
+-- case_status_events.source only allowed ('api_history', 'poll') — neither
+-- fits a user-triggered CEAC refresh. Widen it rather than misuse 'poll'
+-- (which would misleadingly claim this came from a background poller, and
+-- CEAC deliberately has none). Found and fixed 2026-09-13 before this
+-- migration was ever applied — record_ceac_status() below would otherwise
+-- fail its insert on every single call.
+alter table case_status_events drop constraint case_status_events_source_check;
+alter table case_status_events add constraint case_status_events_source_check
+  check (source in ('api_history', 'poll', 'ceac_refresh'));
+
 create or replace function record_ceac_status(
   p_user_case_id uuid,
   p_status_text text,
