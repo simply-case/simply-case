@@ -254,6 +254,41 @@ export type Database = {
         }
         Relationships: []
       }
+      // Hand-patched for migration 0013 (not yet applied to production) —
+      // regenerate with `npm run db:types` after `supabase db push`.
+      news_items: {
+        Row: {
+          external_id: string
+          fetched_at: string
+          id: string
+          published_at: string
+          source: string
+          summary: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          external_id: string
+          fetched_at?: string
+          id?: string
+          published_at: string
+          source: string
+          summary?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          external_id?: string
+          fetched_at?: string
+          id?: string
+          published_at?: string
+          source?: string
+          summary?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
