@@ -1,9 +1,16 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Link } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
 import { Button, Input } from "@/components/ui";
+
+// The web app hosts the actual legal pages — mobile opens them in the
+// in-app browser rather than duplicating the text natively (one place to
+// keep accurate and up to date).
+const TERMS_URL = "https://simply-case-web.vercel.app/legal/terms";
+const PRIVACY_URL = "https://simply-case-web.vercel.app/legal/privacy";
 
 export default function SignInScreen() {
   const { colors, spacing, fontSize } = useTheme();
@@ -103,6 +110,20 @@ function PasswordForm() {
         loading={submitting}
         disabled={!canSubmit}
       />
+
+      {mode === "signup" && (
+        <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center" }}>
+          By creating an account you agree to the{" "}
+          <Text style={{ textDecorationLine: "underline" }} onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}>
+            Terms
+          </Text>{" "}
+          and{" "}
+          <Text style={{ textDecorationLine: "underline" }} onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}>
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+      )}
 
       {message && (
         <Text

@@ -85,6 +85,11 @@ export default async function CaseDetailPage({
           </ol>
         )}
       </section>
+
+      <p className="mt-10 text-xs text-[var(--color-text-faint)]">
+        Not affiliated with USCIS or any government agency. Not legal
+        advice. Always confirm status on the official government site.
+      </p>
     </main>
   );
 }
