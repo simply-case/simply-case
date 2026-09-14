@@ -513,6 +513,16 @@ export type Database = {
       }
     }
     Functions: {
+      // Hand-patched for migration 0014 (not yet applied to production) —
+      // regenerate with `npm run db:types` after `supabase db push`.
+      record_ceac_status: {
+        Args: {
+          p_status_detail?: string
+          p_status_text: string
+          p_user_case_id: string
+        }
+        Returns: undefined
+      }
       add_case: {
         Args: {
           p_case_key: string

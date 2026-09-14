@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { router } from "expo-router";
-import { normalizeCaseKey, type Database } from "@mycasepro/shared";
+import { displayCaseKey, normalizeCaseKey, normalizeCeacCaseKey, type Database } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
 import { Button, Card, EmptyState, Input, ListRow, StatusPill } from "@/components/ui";
@@ -10,11 +10,22 @@ import { AppHeader } from "@/components/AppHeader";
 
 type CaseRow = Database["public"]["Views"]["my_case_details"]["Row"];
 
+/** The three ways a case can be added, each with its own input shape and
+ * validation — see ROADMAP F5 for why CEAC needs two of these. */
+type AddCaseType = "uscis" | "ceac_immigrant" | "ceac_nonimmigrant";
+
+const ADD_CASE_TYPES: Array<{ id: AddCaseType; label: string; placeholder: string }> = [
+  { id: "uscis", label: "USCIS receipt", placeholder: "Receipt number, e.g. IOE0912345678" },
+  { id: "ceac_immigrant", label: "NVC case (immigrant)", placeholder: "NVC case number, e.g. MTL2024678901" },
+  { id: "ceac_nonimmigrant", label: "Visa application (DS-160)", placeholder: "Application ID, e.g. AA00123456789" },
+];
+
 export default function DashboardScreen() {
   const { colors, spacing, fontSize } = useTheme();
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [addType, setAddType] = useState<AddCaseType>("uscis");
   const [receiptNumber, setReceiptNumber] = useState("");
   const [nickname, setNickname] = useState("");
   const [adding, setAdding] = useState(false);
@@ -42,10 +53,26 @@ export default function DashboardScreen() {
 
   async function handleAddCase() {
     let normalized: string;
+    let provider: "uscis" | "ceac";
     try {
-      normalized = normalizeCaseKey("uscis", receiptNumber);
+      if (addType === "uscis") {
+        provider = "uscis";
+        normalized = normalizeCaseKey("uscis", receiptNumber);
+      } else {
+        provider = "ceac";
+        normalized = normalizeCeacCaseKey(
+          addType === "ceac_immigrant" ? "immigrant" : "nonimmigrant",
+          receiptNumber,
+        );
+      }
     } catch {
-      setAddError("Expected 3 letters followed by 10 digits, e.g. IOE0912345678.");
+      setAddError(
+        addType === "uscis"
+          ? "Expected 3 letters followed by 10 digits, e.g. IOE0912345678."
+          : addType === "ceac_immigrant"
+            ? "Expected 3 letters followed by 8-10 digits, e.g. MTL2024678901."
+            : "Expected 2 letters followed by 8-12 digits, e.g. AA00123456789.",
+      );
       return;
     }
 
@@ -55,7 +82,7 @@ export default function DashboardScreen() {
     // tracked_cases has no insert policy for authenticated users by design,
     // so a direct insert isn't an option; this is the only path in.
     const { error } = await supabase.rpc("add_case", {
-      p_provider: "uscis",
+      p_provider: provider,
       p_case_key: normalized,
       p_nickname: nickname.trim() || undefined,
     });
@@ -115,15 +142,40 @@ export default function DashboardScreen() {
         <>
           <Card style={{ marginBottom: spacing.xl, gap: spacing.sm }}>
             <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text, marginBottom: spacing.xs }}>
-              Add a case (USCIS)
+              Add a case
             </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.xs }}>
+              {ADD_CASE_TYPES.map((t) => (
+                <Pressable
+                  key={t.id}
+                  onPress={() => {
+                    setAddType(t.id);
+                    if (addError) setAddError(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: addType === t.id }}
+                  style={{
+                    paddingVertical: spacing.xs,
+                    paddingHorizontal: spacing.sm,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: addType === t.id ? colors.accent : colors.border,
+                    backgroundColor: addType === t.id ? colors.surfaceMuted : "transparent",
+                  }}
+                >
+                  <Text style={{ fontSize: fontSize.xs, color: addType === t.id ? colors.accent : colors.textMuted }}>
+                    {t.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             <Input
               value={receiptNumber}
               onChangeText={(t) => {
                 setReceiptNumber(t);
                 if (addError) setAddError(null);
               }}
-              placeholder="Receipt number, e.g. IOE0912345678"
+              placeholder={ADD_CASE_TYPES.find((t) => t.id === addType)!.placeholder}
               autoCapitalize="characters"
               autoCorrect={false}
               error={addError ?? undefined}
@@ -204,7 +256,7 @@ function CaseCard({
             {c.nickname || c.case_key}
           </Text>
           <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: 2, textTransform: "uppercase" }}>
-            {c.provider} · {c.case_key}
+            {c.provider} · {displayCaseKey(c.case_key ?? "")}
             {c.form_type ? ` · ${c.form_type}` : ""}
           </Text>
           <View style={{ marginTop: spacing.sm }}>
