@@ -519,3 +519,59 @@ Apple Developer account. Phase E (domain/confirmations).
    any real beta tester signs up.
 7. Test the CEAC refresh screen on a real case (after 0014 is applied).
 8. Optionally re-add `EAC9999103400` if its loss is missed.
+
+---
+
+## Phase F build run — follow-up review and fixes (2026-09-13, later)
+
+Before the user tested anything, the branches above were reviewed again
+and found to have 4 real bugs, all fixed before testing began:
+
+1. **CEAC saving would have failed on every call.** `case_status_events`
+   only allowed `source in ('api_history', 'poll')`; `record_ceac_status()`
+   inserted `'ceac_refresh'`. Fixed by widening the constraint in
+   migration 0014 itself (not yet applied, so no separate fix migration
+   needed).
+2. **`classifyStatus()` misclassified real USCIS text.** The CEAC
+   additions matched `"issued"`/`"ready"` as bare substrings, so "Notice
+   of Intent to Deny Was Issued" read as `approved`. Fixed by exact-
+   matching CEAC's short fixed vocabulary before any substring pattern
+   runs; regression test added using that exact sentence.
+3. **CEAC auto-detection never ran on the result page** — it only
+   injected once, at initial load, and the CEAC form posts back to the
+   same URL rather than navigating, so the original
+   `onNavigationStateChange` comment's premise was wrong regardless.
+   Fixed with `onLoadEnd` + a load counter that skips the first (form)
+   page.
+4. **The polling watchdog (0012) had a blind spot**: it only checked for
+   stale-but-still-active cases, but a case that hits 10 consecutive
+   errors is excluded from `claim_due_cases` entirely and can never look
+   "stale" again — so the watchdog would stay silent forever on exactly
+   the case most worth alerting on. Added a second, independently-
+   throttled "circuit-broken" check.
+
+**The Gateway Timeout was investigated properly** with a throwaway
+diagnostic function (deployed, tested, deleted, never committed) rather
+than left as "probably Supabase's fault": 18 isolated database calls from
+inside an Edge Function all succeeded fast. The one thing those never
+exercised — a real call, a multi-second wait on USCIS, then another call —
+produced one clearly slower response when tested, though not a
+reliably-reproducible hard failure. Consistent with (not proven to be) a
+pooled connection going stale during the USCIS wait. Mitigated with a
+one-retry wrapper around every database write that follows a USCIS call
+in `check-cases`; deployed and confirmed working via the exact
+`net.http_post` path pg_cron uses.
+
+**All 7 branches with real changes, plus the 2 already-pushed docs
+branches, were combined into one local branch (`test/all-features`) for
+one combined manual test pass**, per the user's choice to ship this as a
+single PR rather than 7 separate ones. All 61 tests pass, typecheck is
+clean, and the web app was booted locally to confirm `/legal/terms` and
+`/legal/privacy` both return 200 logged out.
+
+**Still true and unresolved:** `EAC9999103403` is circuit-broken (10
+errors) and `LIN9999106498` is at 8 — neither has been reset, since
+that's a production data write left for the user to approve. USCIS's
+sandbox is currently returning "unavailable" on at least one case, so the
+"weekend traffic works" finding from earlier today should not yet be
+treated as settled.
