@@ -38,6 +38,36 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Retries a database call once after a short delay if it fails.
+ *
+ * Found investigating the 2026-09-12/13 "Gateway Timeout" outage (see
+ * docs/HANDOFF.md "Polling outage"): a throwaway diagnostic function
+ * showed single, isolated database calls always succeeding fast (~100-
+ * 300ms), but a call made right after a multi-second gap occasionally
+ * came back much slower (~1s) — and the real failures only ever happen on
+ * the database calls in applyResult()/recordError(), which run right
+ * after uscis.fetchStatus()'s network round trip. That's consistent with
+ * a pooled connection going stale/idle during the wait on USCIS and
+ * needing a slow (or, intermittently, too-slow) reconnect — NOT proven
+ * with certainty (it didn't reliably reproduce a hard failure on demand),
+ * but it's the one place in this function's real call pattern that a
+ * synthetic single-call test never exercises, so it's the most likely
+ * explanation available. A single retry is a safe mitigation either way:
+ * cheap, and a second consecutive failure still surfaces exactly as
+ * before rather than being silently swallowed.
+ */
+async function withRetry<T extends { error: unknown }>(
+  fn: () => Promise<T>,
+  label: string,
+): Promise<T> {
+  const first = await fn();
+  if (!first.error) return first;
+  console.error(`${label} failed once, retrying:`, first.error);
+  await sleep(500);
+  return fn();
+}
+
 interface TrackedCaseRow {
   id: string;
   case_key: string;
@@ -192,13 +222,26 @@ Deno.serve(async (req: Request) => {
       acc[e.kind] = (acc[e.kind] ?? 0) + 1;
       return acc;
     }, {});
-    await db.from("poll_runs").update({
-      finished_at: new Date().toISOString(),
-      updated: summary.updated,
-      changed: summary.changed,
-      errored: summary.errored,
-      error_kinds: errorKinds,
-    }).eq("id", runId);
+    // Retried like the other post-USCIS-call writes above — this is the
+    // very call whose failure produced the "finished_at stays null" rows
+    // in the original outage investigation (docs/HANDOFF.md).
+    const { error: finishError } = await withRetry(
+      () =>
+        db.from("poll_runs").update({
+          finished_at: new Date().toISOString(),
+          updated: summary.updated,
+          changed: summary.changed,
+          errored: summary.errored,
+          error_kinds: errorKinds,
+        }).eq("id", runId),
+      "poll_runs finish update",
+    );
+    if (finishError) {
+      // Don't throw here — the actual polling work already succeeded and
+      // summary is about to be returned; losing the observability row is
+      // bad, but crashing a successful run over it would be worse.
+      console.error("poll_runs finish update failed after retry:", finishError);
+    }
   }
 
   return new Response(JSON.stringify(summary), {
@@ -232,7 +275,7 @@ async function applyResult(
       source: "api_history" as const,
       observed_at: h.observedAt,
     }));
-    const { error } = await db.from("case_status_events").insert(rows);
+    const { error } = await withRetry(() => db.from("case_status_events").insert(rows), "history insert");
     if (error) throw new Error(`history insert failed: ${error.message}`);
   }
 
@@ -247,40 +290,48 @@ async function applyResult(
 
   let newEventId: string | null = null;
   if (changed && !alreadyCapturedByHistory && result.statusTextEn) {
-    const { data, error } = await db
-      .from("case_status_events")
-      .insert({
-        tracked_case_id: trackedCase.id,
-        status_text_en: result.statusTextEn,
-        status_detail_en: result.statusDetailEn,
-        status_text_es: result.statusTextEs,
-        status_detail_es: result.statusDetailEs,
-        source: "poll",
-        observed_at: result.fetchedAt,
-      })
-      .select("id")
-      .single();
+    const { data, error } = await withRetry(
+      () =>
+        db
+          .from("case_status_events")
+          .insert({
+            tracked_case_id: trackedCase.id,
+            status_text_en: result.statusTextEn,
+            status_detail_en: result.statusDetailEn,
+            status_text_es: result.statusTextEs,
+            status_detail_es: result.statusDetailEs,
+            source: "poll",
+            observed_at: result.fetchedAt,
+          })
+          .select("id")
+          .single(),
+      "poll event insert",
+    );
     if (error) throw new Error(`poll event insert failed: ${error.message}`);
     newEventId = data.id;
   }
 
-  const { error: updateError } = await db
-    .from("tracked_cases")
-    .update({
-      form_type: result.formType,
-      submitted_at: result.submittedAt,
-      status_text_en: result.statusTextEn,
-      status_detail_en: result.statusDetailEn,
-      status_text_es: result.statusTextEs,
-      status_detail_es: result.statusDetailEs,
-      body_hash: result.bodyHash,
-      last_checked_at: result.fetchedAt,
-      ...(changed ? { last_changed_at: result.fetchedAt } : {}),
-      consecutive_errors: 0,
-      last_error_code: null,
-      last_error_message: null,
-    })
-    .eq("id", trackedCase.id);
+  const { error: updateError } = await withRetry(
+    () =>
+      db
+        .from("tracked_cases")
+        .update({
+          form_type: result.formType,
+          submitted_at: result.submittedAt,
+          status_text_en: result.statusTextEn,
+          status_detail_en: result.statusDetailEn,
+          status_text_es: result.statusTextEs,
+          status_detail_es: result.statusDetailEs,
+          body_hash: result.bodyHash,
+          last_checked_at: result.fetchedAt,
+          ...(changed ? { last_changed_at: result.fetchedAt } : {}),
+          consecutive_errors: 0,
+          last_error_code: null,
+          last_error_message: null,
+        })
+        .eq("id", trackedCase.id),
+    "tracked_cases update",
+  );
   if (updateError) {
     throw new Error(`tracked_cases update failed: ${updateError.message}`);
   }
@@ -289,11 +340,15 @@ async function applyResult(
   // send-notifications function (Phase 6) — keeps "detect a change" and
   // "deliver a push/email" as independently retryable steps.
   if (newEventId) {
-    const { data: subscribers, error: subError } = await db
-      .from("user_cases")
-      .select("id, notify_email")
-      .eq("tracked_case_id", trackedCase.id)
-      .is("archived_at", null);
+    const { data: subscribers, error: subError } = await withRetry(
+      () =>
+        db
+          .from("user_cases")
+          .select("id, notify_email")
+          .eq("tracked_case_id", trackedCase.id)
+          .is("archived_at", null),
+      "subscriber lookup",
+    );
     if (subError) throw new Error(`subscriber lookup failed: ${subError.message}`);
 
     // push omitted deliberately: send-notifications has no consumer for it
@@ -314,11 +369,15 @@ async function applyResult(
     // fetch it via the user_cases -> notifications relationship is awkward
     // from here, so pull it in the same query instead.
     if (rows.length > 0) {
-      const { data: subsWithUser } = await db
-        .from("user_cases")
-        .select("id, user_id")
-        .eq("tracked_case_id", trackedCase.id)
-        .is("archived_at", null);
+      const { data: subsWithUser } = await withRetry(
+        () =>
+          db
+            .from("user_cases")
+            .select("id, user_id")
+            .eq("tracked_case_id", trackedCase.id)
+            .is("archived_at", null),
+        "subscriber user_id lookup",
+      );
       const userIdByUserCase = new Map(
         (subsWithUser ?? []).map((s: { id: string; user_id: string }) => [s.id, s.user_id]),
       );
@@ -327,9 +386,10 @@ async function applyResult(
         .filter((r) => r.user_id);
 
       if (rowsWithUser.length > 0) {
-        const { error: notifyError } = await db
-          .from("notifications")
-          .insert(rowsWithUser);
+        const { error: notifyError } = await withRetry(
+          () => db.from("notifications").insert(rowsWithUser),
+          "notification enqueue",
+        );
         if (notifyError) {
           throw new Error(`notification enqueue failed: ${notifyError.message}`);
         }
@@ -357,25 +417,33 @@ async function recordError(
   };
   if (err.countsAsCaseError) {
     updates.last_checked_at = new Date().toISOString();
-    const { error } = await db.rpc("increment_case_errors", {
-      p_tracked_case_id: trackedCase.id,
-      p_error_code: updates.last_error_code,
-      p_error_message: updates.last_error_message,
-    });
+    const { error } = await withRetry(
+      () =>
+        db.rpc("increment_case_errors", {
+          p_tracked_case_id: trackedCase.id,
+          p_error_code: updates.last_error_code,
+          p_error_message: updates.last_error_message,
+        }),
+      "increment_case_errors",
+    );
     if (error) throw new Error(`error recording failed: ${error.message}`);
   } else {
-    const { error } = await db
-      .from("tracked_cases")
-      .update(updates)
-      .eq("id", trackedCase.id);
+    const { error } = await withRetry(
+      () => db.from("tracked_cases").update(updates).eq("id", trackedCase.id),
+      "tracked_cases error update",
+    );
     if (error) throw new Error(`error recording failed: ${error.message}`);
   }
 
   if (err.retryable) {
-    const { error } = await db.rpc("reschedule_case_soon", {
-      p_tracked_case_id: trackedCase.id,
-      p_delay_seconds: RETRY_SOON_SECONDS,
-    });
+    const { error } = await withRetry(
+      () =>
+        db.rpc("reschedule_case_soon", {
+          p_tracked_case_id: trackedCase.id,
+          p_delay_seconds: RETRY_SOON_SECONDS,
+        }),
+      "reschedule_case_soon",
+    );
     if (error) throw new Error(`reschedule failed: ${error.message}`);
   }
 }
