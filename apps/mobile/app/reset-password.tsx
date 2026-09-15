@@ -11,7 +11,7 @@ import { Button, Input } from "@/components/ui";
  * password without needing the old one.
  */
 export default function ResetPasswordScreen() {
-  const { colors, spacing, fontSize } = useTheme();
+  const { colors, spacing, fontSize, fontFamily } = useTheme();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
@@ -47,26 +47,32 @@ export default function ResetPasswordScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ fontSize: fontSize.lg, fontWeight: "700", color: colors.text }}>Set a new password</Text>
-        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
+        <Text style={{ fontSize: fontSize.xxl, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>
+          Set a new password
+        </Text>
+        <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
           Choose a password you&apos;ll use to sign in from now on.
         </Text>
 
         <View style={{ gap: spacing.md }}>
           <Input
+            label="New password"
             value={password}
             onChangeText={setPassword}
-            placeholder="New password (min. 6 characters)"
+            placeholder="Min. 6 characters"
             secureTextEntry
+            secureToggle
             autoCapitalize="none"
             autoComplete="new-password"
             error={tooShort ? "Password must be at least 6 characters." : undefined}
           />
           <Input
+            label="Confirm password"
             value={confirm}
             onChangeText={setConfirm}
-            placeholder="Confirm new password"
+            placeholder="Re-enter your new password"
             secureTextEntry
+            secureToggle
             autoCapitalize="none"
             autoComplete="new-password"
             error={mismatch ? "Passwords don't match." : undefined}

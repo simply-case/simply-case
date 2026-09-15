@@ -1,19 +1,20 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Link } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
+import { PRIVACY_URL, TERMS_URL } from "@/lib/links";
 import { Button, Input } from "@/components/ui";
 
-// The web app hosts the actual legal pages — mobile opens them in the
-// in-app browser rather than duplicating the text natively (one place to
-// keep accurate and up to date).
-const TERMS_URL = "https://simply-case-web.vercel.app/legal/terms";
-const PRIVACY_URL = "https://simply-case-web.vercel.app/legal/privacy";
+// The combined wordmark + icon lockup used on the splash screen (app.json
+// -> expo-splash-screen). It's flat navy with no dark-mode variant, but
+// app.json pins userInterfaceStyle to "light" app-wide, so useTheme() here
+// always resolves to the light palette anyway — safe to use as-is.
+const LOGO = require("../assets/splash-logo.png");
 
 export default function SignInScreen() {
-  const { colors, spacing, fontSize } = useTheme();
+  const { colors, spacing } = useTheme();
 
   return (
     <KeyboardAvoidingView
@@ -24,10 +25,10 @@ export default function SignInScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>Simply Case</Text>
-        <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
-          Track your immigration case status.
-        </Text>
+        <View style={{ alignItems: "center", marginBottom: spacing.xl }}>
+          <Image source={LOGO} style={{ width: 168, height: 148 }} resizeMode="contain" />
+        </View>
+
         <PasswordForm />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -50,7 +51,7 @@ export default function SignInScreen() {
  * broken rather than "coming soon". Tracked in docs/ROADMAP.md.
  */
 function PasswordForm() {
-  const { colors, spacing, fontSize } = useTheme();
+  const { colors, spacing, fontSize, fontFamily } = useTheme();
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -85,7 +86,17 @@ function PasswordForm() {
 
   return (
     <View style={{ gap: spacing.md }}>
+      <Text style={{ fontSize: fontSize.xxl, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>
+        {mode === "signin" ? "Welcome back" : "Create your account"}
+      </Text>
+      <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: -spacing.xs, marginBottom: spacing.sm }}>
+        {mode === "signin"
+          ? "Sign in to your account to continue with Simply Case."
+          : "Track your immigration case status, in one place."}
+      </Text>
+
       <Input
+        label="Email"
         value={email}
         onChangeText={setEmail}
         placeholder="you@example.com"
@@ -95,10 +106,12 @@ function PasswordForm() {
         autoComplete="email"
       />
       <Input
+        label="Password"
         value={password}
         onChangeText={setPassword}
-        placeholder="Password (min. 6 characters)"
+        placeholder="Your password"
         secureTextEntry
+        secureToggle
         autoCapitalize="none"
         autoComplete={mode === "signin" ? "current-password" : "new-password"}
         onSubmitEditing={canSubmit ? handleSubmit : undefined}
@@ -111,14 +124,20 @@ function PasswordForm() {
         disabled={!canSubmit}
       />
 
+      {mode === "signin" && (
+        <Link href="/forgot-password" style={{ fontSize: fontSize.sm, color: colors.link, textAlign: "center", fontWeight: "600" }}>
+          Forgot password?
+        </Link>
+      )}
+
       {mode === "signup" && (
         <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center" }}>
           By creating an account you agree to the{" "}
-          <Text style={{ textDecorationLine: "underline" }} onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}>
+          <Text style={{ color: colors.link, textDecorationLine: "underline" }} onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}>
             Terms
           </Text>{" "}
           and{" "}
-          <Text style={{ textDecorationLine: "underline" }} onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}>
+          <Text style={{ color: colors.link, textDecorationLine: "underline" }} onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}>
             Privacy Policy
           </Text>
           .
@@ -134,22 +153,28 @@ function PasswordForm() {
         </Text>
       )}
 
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm }}>
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          marginTop: spacing.sm,
+          paddingTop: spacing.lg,
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>
+          {mode === "signin" ? "Don’t have an account?" : "Already have an account?"}
+        </Text>
         <Pressable
           onPress={() => setMode(mode === "signin" ? "signup" : "signin")}
           accessibilityRole="button"
           hitSlop={12}
+          style={{ marginTop: spacing.xs }}
         >
-          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-            {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
+          <Text style={{ fontSize: fontSize.base, color: colors.link, fontWeight: "700" }}>
+            {mode === "signin" ? "Create account" : "Sign in"}
           </Text>
         </Pressable>
-
-        {mode === "signin" && (
-          <Link href="/forgot-password" style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-            Forgot password?
-          </Link>
-        )}
       </View>
     </View>
   );

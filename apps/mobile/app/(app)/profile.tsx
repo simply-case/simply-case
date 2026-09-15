@@ -1,83 +1,74 @@
-import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
-import * as WebBrowser from "expo-web-browser";
-import type { Database } from "@mycasepro/shared";
+import { useState } from "react";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
-import { Button, Card, Input, ListRow, Skeleton } from "@/components/ui";
+import { PRIVACY_URL, TERMS_URL, openContactEmail, openLegalPage } from "@/lib/links";
+import { Card } from "@/components/ui";
 import { AppHeader } from "@/components/AppHeader";
 
-type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
-
-// The web app hosts the actual legal text (see sign-in.tsx for the same
-// pattern) — one place to keep it accurate.
-const TERMS_URL = "https://simply-case-web.vercel.app/legal/terms";
-const PRIVACY_URL = "https://simply-case-web.vercel.app/legal/privacy";
-
-/** "" / null both mean "not set" in the UI; only a valid 0-23 integer is
- * sent to the database. Kept as strings while editing so the field can be
- * legitimately empty mid-edit without coercing to 0. */
-function hourToInput(h: number | null): string {
-  return h === null || h === undefined ? "" : String(h);
+interface SettingsRowProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  /** "external" shows an arrow-out icon for rows that leave the app
+   * (browser / mail) instead of the chevron used for in-app screens. */
+  kind?: "screen" | "external" | "plain";
+  danger?: boolean;
+  isLast?: boolean;
+  disabled?: boolean;
 }
 
-function parseHour(s: string): number | null {
-  if (s.trim() === "") return null;
-  const n = Number(s);
-  if (!Number.isInteger(n) || n < 0 || n > 23) return null;
-  return n;
+function SettingsRow({ icon, label, onPress, kind = "screen", danger, isLast, disabled }: SettingsRowProps) {
+  const { colors, spacing, fontSize } = useTheme();
+  const tint = danger ? colors.danger : colors.text;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        backgroundColor: pressed ? colors.surfaceMuted : "transparent",
+        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomColor: colors.border,
+        opacity: disabled ? 0.5 : 1,
+      })}
+    >
+      <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.accent} />
+      <Text style={{ flex: 1, fontSize: fontSize.base, color: tint }}>{label}</Text>
+      {kind === "screen" && <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />}
+      {kind === "external" && <Ionicons name="open-outline" size={16} color={colors.textFaint} />}
+    </Pressable>
+  );
+}
+
+/** A titled, rounded group of rows — rows share one card with dividers
+ * between them, the standard iOS settings-list shape. */
+function Section({ title, children }: { title?: string; children: React.ReactNode }) {
+  const { colors, spacing, fontSize } = useTheme();
+  return (
+    <View style={{ gap: spacing.xs }}>
+      {title && (
+        <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, textTransform: "uppercase", marginLeft: spacing.xs }}>
+          {title}
+        </Text>
+      )}
+      <Card style={{ padding: 0, overflow: "hidden" }}>{children}</Card>
+    </View>
+  );
 }
 
 export default function ProfileScreen() {
   const { colors, spacing, fontSize } = useTheme();
   const { session, signOut } = useAuth();
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [quietStart, setQuietStart] = useState("");
-  const [quietEnd, setQuietEnd] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      // RLS (0002_rls.sql: profiles_select_own) scopes this to the caller's
-      // own row — there's no user_id filter to add here, same pattern as
-      // the my_case_* views used elsewhere in the app.
-      const { data } = await supabase.from("profiles").select("*").single();
-      if (!cancelled && data) {
-        setProfile(data);
-        setQuietStart(hourToInput(data.quiet_hours_start));
-        setQuietEnd(hourToInput(data.quiet_hours_end));
-      }
-      if (!cancelled) setLoading(false);
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const startVal = quietStart.trim() === "" ? null : parseHour(quietStart);
-  const endVal = quietEnd.trim() === "" ? null : parseHour(quietEnd);
-  const startInvalid = quietStart.trim() !== "" && startVal === null;
-  const endInvalid = quietEnd.trim() !== "" && endVal === null;
-  const canSave = !startInvalid && !endInvalid && !saving;
-
-  async function handleSaveQuietHours() {
-    setSaving(true);
-    setMessage(null);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ quiet_hours_start: startVal, quiet_hours_end: endVal })
-      .eq("id", profile!.id);
-    setSaving(false);
-    setMessage(
-      error ? { text: error.message, isError: true } : { text: "Saved.", isError: false },
-    );
-  }
 
   /**
    * Two-step confirmation (Apple's account-deletion guidance expects this
@@ -100,11 +91,10 @@ export default function ProfileScreen() {
 
   async function handleDeleteAccount() {
     setDeleting(true);
-    setMessage(null);
     const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
     if (error) {
       setDeleting(false);
-      setMessage({ text: "Couldn't delete your account. Please try again.", isError: true });
+      Alert.alert("Couldn't delete your account", "Please try again.");
       return;
     }
     // The account is already gone server-side; signOut() just clears the
@@ -112,16 +102,11 @@ export default function ProfileScreen() {
     await signOut();
   }
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <AppHeader />
-        <View style={{ padding: spacing.lg, gap: spacing.md }}>
-          <Skeleton style={{ height: 60, borderRadius: 10 }} />
-          <Skeleton style={{ height: 140, borderRadius: 10 }} />
-        </View>
-      </View>
-    );
+  function confirmSignOut() {
+    Alert.alert("Sign out?", undefined, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: signOut },
+    ]);
   }
 
   return (
@@ -131,69 +116,37 @@ export default function ProfileScreen() {
         style={{ flex: 1, backgroundColor: colors.bg }}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.lg }}
       >
-      <Card style={{ gap: spacing.xs }}>
-        <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, textTransform: "uppercase" }}>
-          Signed in as
-        </Text>
-        <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.text }}>
-          {session?.user.email}
-        </Text>
-      </Card>
+        <Card style={{ gap: spacing.xs }}>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, textTransform: "uppercase" }}>Signed in as</Text>
+          <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.text }}>{session?.user.email}</Text>
+        </Card>
 
-      <Card style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>Quiet hours</Text>
-        <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, marginBottom: spacing.xs }}>
-          No notifications will be sent during this window, in your local time. Leave blank for no
-          quiet hours.
-        </Text>
+        <Section title="Settings">
+          <SettingsRow icon="notifications-outline" label="Notification settings" onPress={() => router.push("/notifications")} isLast />
+        </Section>
 
-        <View style={{ flexDirection: "row", gap: spacing.md }}>
-          <View style={{ flex: 1 }}>
-            <Input
-              label="Start (0-23)"
-              value={quietStart}
-              onChangeText={setQuietStart}
-              keyboardType="number-pad"
-              placeholder="e.g. 22"
-              error={startInvalid ? "0-23" : undefined}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Input
-              label="End (0-23)"
-              value={quietEnd}
-              onChangeText={setQuietEnd}
-              keyboardType="number-pad"
-              placeholder="e.g. 7"
-              error={endInvalid ? "0-23" : undefined}
-            />
-          </View>
-        </View>
+        <Section title="Support">
+          <SettingsRow icon="help-circle-outline" label="Help & feedback" onPress={() => router.push("/help")} />
+          <SettingsRow icon="mail-outline" label="Contact us" kind="external" onPress={() => openContactEmail("Simply Case support")} isLast />
+        </Section>
 
-        <Button label="Save" onPress={handleSaveQuietHours} loading={saving} disabled={!canSave} />
+        <Section title="Legal">
+          <SettingsRow icon="document-text-outline" label="Terms of Service" kind="external" onPress={() => openLegalPage(TERMS_URL)} />
+          <SettingsRow icon="shield-checkmark-outline" label="Privacy Policy" kind="external" onPress={() => openLegalPage(PRIVACY_URL)} isLast />
+        </Section>
 
-        {message && (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ fontSize: fontSize.sm, color: message.isError ? colors.danger : colors.accent }}
-          >
-            {message.text}
-          </Text>
-        )}
-      </Card>
-
-      <View style={{ gap: spacing.sm }}>
-        <ListRow onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}>
-          <Text style={{ fontSize: fontSize.base, color: colors.text }}>Terms of Service</Text>
-        </ListRow>
-        <ListRow onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}>
-          <Text style={{ fontSize: fontSize.base, color: colors.text }}>Privacy Policy</Text>
-        </ListRow>
-      </View>
-
-      <Button label="Sign out" variant="secondary" onPress={signOut} />
-
-      <Button label="Delete account" variant="danger" onPress={confirmDeleteAccount} loading={deleting} />
+        <Section>
+          <SettingsRow icon="log-out-outline" label="Sign out" kind="plain" onPress={confirmSignOut} />
+          <SettingsRow
+            icon="trash-outline"
+            label={deleting ? "Deleting account…" : "Delete account"}
+            kind="plain"
+            danger
+            disabled={deleting}
+            onPress={confirmDeleteAccount}
+            isLast
+          />
+        </Section>
       </ScrollView>
     </View>
   );

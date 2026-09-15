@@ -69,6 +69,11 @@ function RootNavigator() {
           authenticated and just need to choose a new password. */}
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="reset-password" options={{ title: "New password" }} />
+        {/* Pushed from Profile and the Cases menu. Root-stack screens rather than
+            (app)/ routes, so they don't become extra tabs and get a native
+            back button for free. */}
+        <Stack.Screen name="notifications" options={{ title: "Notification settings" }} />
+        <Stack.Screen name="help" options={{ title: "Help & feedback" }} />
       </Stack.Protected>
     </Stack>
   );

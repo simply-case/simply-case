@@ -14,7 +14,7 @@ import { Button, Input } from "@/components/ui";
 const redirectTo = makeRedirectUri({ path: "/auth/confirm" });
 
 export default function ForgotPasswordScreen() {
-  const { colors, spacing, fontSize } = useTheme();
+  const { colors, spacing, fontSize, fontFamily } = useTheme();
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
@@ -49,10 +49,10 @@ export default function ForgotPasswordScreen() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: spacing.xl }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ fontSize: fontSize.lg, fontWeight: "700", color: colors.text }}>
+        <Text style={{ fontSize: fontSize.xxl, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>
           Reset your password
         </Text>
-        <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
+        <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.xl }}>
           We&apos;ll email you a link to set a new one.
         </Text>
 
@@ -84,7 +84,7 @@ export default function ForgotPasswordScreen() {
             hitSlop={12}
             style={{ marginTop: spacing.md }}
           >
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center" }}>
+            <Text style={{ fontSize: fontSize.sm, color: colors.link, textAlign: "center", fontWeight: "600" }}>
               ← Back to sign in
             </Text>
           </Pressable>

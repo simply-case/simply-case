@@ -4,3 +4,4 @@ export * from "./Card";
 export * from "./StatusPill";
 export * from "./EmptyState";
 export * from "./Skeleton";
+export * from "./BottomSheet";

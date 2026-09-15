@@ -10,7 +10,7 @@ type CaseRow = Database["public"]["Views"]["my_case_details"]["Row"];
 type EventRow = Database["public"]["Views"]["my_case_events"]["Row"];
 
 export default function CaseDetailScreen() {
-  const { colors, spacing, fontSize } = useTheme();
+  const { colors, spacing, fontSize, fontFamily } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [caseDetail, setCaseDetail] = useState<CaseRow | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -64,7 +64,7 @@ export default function CaseDetailScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}>
-      <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text }}>
+      <Text style={{ fontSize: fontSize.xl, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>
         {caseDetail.nickname || caseDetail.case_key}
       </Text>
       <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs, textTransform: "uppercase" }}>

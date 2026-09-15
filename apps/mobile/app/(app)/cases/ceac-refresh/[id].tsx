@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
+import * as WebBrowser from "expo-web-browser";
 import { router, useLocalSearchParams } from "expo-router";
 import { parseCeacCaseKey } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
@@ -8,6 +9,22 @@ import { useTheme } from "@/lib/theme";
 import { Button, Card } from "@/components/ui";
 
 const CEAC_URL = "https://ceac.state.gov/CEACStatTracker/Status.aspx";
+
+// CEAC (like most state.gov pages) sits behind a bot-check interstitial
+// ("Performing security check…") that only resolves for what it judges a
+// real browser. react-native-webview's default user agent identifies
+// itself as an embedded WebView (Android appends "; wv", both platforms
+// omit a version string real Safari/Chrome send), which some checks flag
+// outright — so the check never completes and the page spins forever.
+// Sending a mainstream desktop-class Chrome UA instead is the standard,
+// ToS-neutral fix (it changes only what the WebView announces itself as,
+// not how the page is fetched — no third-party scraping/unblocking
+// service involved, which the product deliberately avoids, see
+// docs/PLAN.md and docs/HANDOFF.md §5). It isn't guaranteed against every
+// future check, which is why the "open in your regular browser" escape
+// hatch below exists as a fallback that always works.
+const WEBVIEW_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
 /**
  * A handful of CEAC's documented status words (docs/PLAN.md CEAC status
@@ -71,7 +88,7 @@ interface CaseInfo {
 }
 
 export default function CeacRefreshScreen() {
-  const { colors, spacing, fontSize } = useTheme();
+  const { colors, spacing, fontSize, fontFamily } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [info, setInfo] = useState<CaseInfo | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
@@ -146,6 +163,21 @@ export default function CeacRefreshScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+        <Pressable
+          onPress={() => router.push(`/cases/${id}`)}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={{ alignSelf: "flex-start" }}
+        >
+          <Text style={{ fontSize: fontSize.sm, color: colors.link, fontWeight: "600" }}>
+            ← View status & history
+          </Text>
+        </Pressable>
+
+        {info.nickname && (
+          <Text style={{ fontSize: fontSize.lg, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>{info.nickname}</Text>
+        )}
+
         <Card style={{ gap: spacing.xs }}>
           <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
             {info.caseType === "immigrant" ? "NVC case number" : "DS-160 Application ID"}
@@ -163,6 +195,11 @@ export default function CeacRefreshScreen() {
           <WebView
             ref={webViewRef}
             source={{ uri: CEAC_URL }}
+            userAgent={WEBVIEW_USER_AGENT}
+            incognito={false}
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
+            domStorageEnabled
             onMessage={(event) => {
               try {
                 const data = JSON.parse(event.nativeEvent.data);
@@ -188,6 +225,16 @@ export default function CeacRefreshScreen() {
             }}
           />
         </View>
+
+        <Pressable
+          onPress={() => WebBrowser.openBrowserAsync(CEAC_URL)}
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", textDecorationLine: "underline" }}>
+            Page stuck on a security check? Open it in your regular browser instead
+          </Text>
+        </Pressable>
 
         {detectedStatus && (
           <Card style={{ gap: spacing.sm }}>

@@ -3,33 +3,39 @@
  * (StyleSheet values). One source of truth so a color/spacing change
  * doesn't have to be made twice and can't silently drift between platforms.
  *
- * Design direction: "crisp & official" (revised 2026-09-11, replacing an
- * earlier warm/editorial palette) — cooler neutrals, sharper radii, an
- * institutional navy accent sampled directly from the Simply Case logo
- * (apps/mobile/assets/icon.PNG, sampled #0C3D81), tighter spacing. Fits a
- * legal/government-adjacent product and signals accuracy over warmth.
+ * Design direction: "warm official" (revised 2026-09-15, replacing the
+ * cooler "crisp & official" pass from 2026-09-11 — this is now the SECOND
+ * revision, from the user's own reference design). A warm cream background
+ * instead of cool gray, softer/rounder radii, and a two-color accent
+ * system: `accent` (institutional navy, sampled from the Simply Case logo,
+ * apps/mobile/assets/icon.PNG, #0C3D81) stays reserved for primary
+ * buttons/filled controls, while the new `link` token (a brighter,
+ * approachable blue) is for tappable text — "Forgot password?", "Create
+ * account", inline links — so a button and a text link never look like the
+ * same affordance. Still legal/government-adjacent, but the earlier
+ * "crisp/cool" pass read as colder than intended.
  *
- * That said, the ORIGINAL brief still governs every choice: this app is
- * opened by someone anxious about an immigration case. "Crisp" must not
- * slide into "cold" or "alarming" — no alarm-red for ordinary states, and
- * a pending status should never *look* like bad news. Official can still
- * be reassuring (see: Mercury, well-run government portals) — that
- * tension is the thing to keep checking against, not resolve once and
+ * The ORIGINAL brief still governs every choice: this app is opened by
+ * someone anxious about an immigration case. No alarm-red for ordinary
+ * states, and a pending status should never *look* like bad news. Official
+ * can still be reassuring (see: Mercury, well-run government portals) —
+ * that tension is the thing to keep checking against, not resolve once and
  * forget.
  */
 
 export const colors = {
   light: {
-    bg: "#F5F7FA",
+    bg: "#FAF3E9",
     surface: "#FFFFFF",
-    surfaceMuted: "#EEF1F5",
-    border: "#DCE1E8",
-    borderStrong: "#C3CBD6",
-    text: "#111827",
-    textMuted: "#5B6472",
-    textFaint: "#8A93A3",
-    accent: "#0C3D81", // brand navy, sampled from the logo — not a generic blue
+    surfaceMuted: "#F4ECDF",
+    border: "#E6DCC9",
+    borderStrong: "#D2C4A9",
+    text: "#1C2230",
+    textMuted: "#6B6558",
+    textFaint: "#9A9284",
+    accent: "#0C3D81", // brand navy, sampled from the logo — reserved for buttons/filled controls
     accentText: "#FFFFFF",
+    link: "#2554C7", // brighter blue, distinct from `accent` — for tappable text only
     danger: "#B3492F", // muted terracotta, not saturated red — reserved for real errors
     dangerBg: "#FBEEEA",
   },
@@ -44,6 +50,7 @@ export const colors = {
     textFaint: "#6B7484",
     accent: "#6FA0E0", // lightened brand navy — #0C3D81 reads too dark on a dark ground
     accentText: "#08172E",
+    link: "#7FA8F5",
     danger: "#E08A70",
     dangerBg: "#2E1E17",
   },
@@ -101,14 +108,14 @@ export const spacing = {
   xxxl: 48,
 } as const;
 
-// Sharper than the original pass (was 6/10/14/20) — part of the "crisp &
-// official" direction. Structure now comes mostly from borders and
-// dividers rather than soft rounding.
+// Softer again for "warm official" (was 4/8/10/14) — inputs and buttons
+// get a noticeably rounded corner, matching the reference design, while
+// staying short of the fully pill-shaped extreme.
 export const radii = {
-  sm: 4,
-  md: 8,
-  lg: 10,
-  xl: 14,
+  sm: 6,
+  md: 12,
+  lg: 16,
+  xl: 20,
   full: 999,
 } as const;
 
