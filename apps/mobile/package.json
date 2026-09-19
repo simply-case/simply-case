@@ -8,7 +8,7 @@
     "@mycasepro/shared": "*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.116.0",
-    "expo": "~57.0.22",
+    "expo": "~57.0.23",
     "expo-auth-session": "~57.0.12",
     "expo-constants": "~57.0.17",
     "expo-dev-client": "~57.0.19",
@@ -18,16 +18,16 @@
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.3",
-    "react": "19.2.3",
-    "react-native": "0.86.3",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.26.0",
+    "react": "19.3.0",
+    "react-native": "0.87.1",
+    "react-native-safe-area-context": "~5.9.1",
+    "react-native-screens": "~4.28.0",
     "react-native-url-polyfill": "^4.0.0",
     "react-native-webview": "13.16.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/react": "~19.2.2",
+    "@types/react": "~19.3.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
