@@ -475,8 +475,12 @@ function formatEoirHeadline(res: EoirCaseInfoResponse): string | null {
   if (!when) return null;
   const calCode = res.Schedule?.CalType;
   const kind = calCode ? `${CAL_TYPE_LABELS[calCode] ?? calCode} hearing` : "hearing";
-  const mediumCode = res.Schedule?.HearingMedium;
-  const mediumPart = mediumCode ? ` ${HEARING_MEDIUM_LABELS[mediumCode] ?? `(${mediumCode})`}` : "";
+  // An unrecognized medium code is left OUT of the sentence rather than
+  // spliced in raw — "your next hearing is (Z) on January 12" reads like a
+  // bug. The code isn't lost: formatEoirResult surfaces it as its own row
+  // so the information is still there, just not pretending to be English.
+  const mediumLabel = res.Schedule?.HearingMedium ? HEARING_MEDIUM_LABELS[res.Schedule.HearingMedium] : undefined;
+  const mediumPart = mediumLabel ? ` ${mediumLabel}` : "";
   return `Your next ${kind} is${mediumPart} on ${when}.`;
 }
 
@@ -570,6 +574,14 @@ function formatEoirResult(
     rows.push({ label: "Hearing link", value: res.Schedule.IJ_WebExURLLink });
   }
 
+  // Only when we couldn't translate it (see formatEoirHeadline) — a
+  // recognized medium is already stated in the headline sentence, so
+  // repeating it here would be noise.
+  const mediumCode = res.Schedule?.HearingMedium;
+  if (mediumCode && !HEARING_MEDIUM_LABELS[mediumCode]) {
+    rows.push({ label: "Hearing medium", value: mediumCode });
+  }
+
   const decisions: Array<[string, string | null | undefined]> = [
     ["Case decision", res.Data?.CaseDecisionString],
     ["Motion decision", res.Data?.MTRDecisionString],
@@ -628,6 +640,14 @@ export default function EoirRefreshScreen() {
   const [loadingLabel, setLoadingLabel] = useState("Refreshing information…");
   const [liveResult, setLiveResult] = useState<EoirCaseInfoResponse | null>(null);
   const [resultRows, setResultRows] = useState<EoirResultRow[]>([]);
+  /** formatEoirResult's human summary. Only SHOWN when there's no
+   * structured hearing to show (a not-found A-Number, or a response we
+   * couldn't pull a hearing/decision out of) — otherwise the dedicated
+   * fields below say the same thing better. Without this, a "no
+   * information found" result rendered as a Case-information card
+   * containing nothing but the A-Number, with no hint the lookup had
+   * come back empty. */
+  const [resultDetail, setResultDetail] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [webViewKey, setWebViewKey] = useState(0);
   const webViewRef = useRef<WebView>(null);
@@ -702,6 +722,7 @@ export default function EoirRefreshScreen() {
     setStatus("loading");
     setLiveResult(null);
     setResultRows([]);
+    setResultDetail("");
     setErrorMessage(null);
     // Remounts the WebView with a fresh window (see FETCH_INTERCEPT_SCRIPT's
     // window.__eoirFetchWrapped guard) rather than calling .reload(), which
@@ -814,6 +835,13 @@ export default function EoirRefreshScreen() {
                 </View>
               )}
 
+              {/* Nothing structured came back (not-found A-Number, or a
+                  response with no hearing/decision in it) — say so plainly
+                  instead of rendering a card that looks empty. */}
+              {!headline && resultDetail !== "" && (
+                <Text style={{ fontSize: fontSize.base, color: colors.text, marginTop: spacing.sm }}>{resultDetail}</Text>
+              )}
+
               {headline && (
                 <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.accent, marginTop: spacing.sm }}>
                   {headline}
@@ -903,6 +931,7 @@ export default function EoirRefreshScreen() {
                     const { statusText, statusDetail, rows } = formatEoirResult(data.body);
                     setLiveResult(data.body);
                     setResultRows(rows);
+                    setResultDetail(statusDetail);
                     setStatus("ready");
                     saveResult(statusText, statusDetail);
                   } else if (data.body && typeof data.body.message === "string") {
