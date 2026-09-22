@@ -168,6 +168,40 @@ function buildAutofillScript(fields: AutofillFields): string {
     return null;
   });
 
+  /**
+   * The WebView is off-screen, but a focused text field still summons the
+   * real OS keyboard over the app — confirmed on device twice
+   * (2026-09-22). A plain blur() after filling was NOT enough: the
+   * react-code-input control advances focus to the NEXT box ITSELF each
+   * time a digit lands, asynchronously, after our blur — so the keyboard
+   * kept coming back. inputmode="none" is the actual fix (it tells the
+   * browser not to raise a virtual keyboard for the field at all, while
+   * still allowing focus and programmatic value setting); the blur and
+   * the sweep below are backup for the moments between React re-renders
+   * resetting the attribute.
+   *
+   * Scoped deliberately to .react-code-input — blurring react-select's
+   * search box instead would close its dropdown mid-selection and break
+   * the nationality fill, so that control gets inputmode="none" only
+   * (see openNationality).
+   */
+  var keyboardSweepStarted = false;
+  function startKeyboardSweep() {
+    if (keyboardSweepStarted) return;
+    keyboardSweepStarted = true;
+    var ticks = 0;
+    var timer = setInterval(function () {
+      try {
+        var active = document.activeElement;
+        if (active && active.closest && active.closest(".react-code-input")) {
+          active.setAttribute("inputmode", "none");
+          active.blur();
+        }
+      } catch (e) {}
+      if (++ticks > 40) clearInterval(timer);
+    }, 150);
+  }
+
   var fillANumber = guard("anumber", function () {
     var container = document.querySelector(".react-code-input");
     if (!container) return false;
@@ -176,8 +210,12 @@ function buildAutofillScript(fields: AutofillFields): string {
     var digits = ${JSON.stringify(paddedANumber)}.split("");
     var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
     var any = false;
+    startKeyboardSweep();
     for (var i = 0; i < inputs.length && i < digits.length; i++) {
       var el = inputs[i];
+      // Set BEFORE focus — after would be too late, the keyboard is
+      // already on its way up.
+      el.setAttribute("inputmode", "none");
       if (el.value) continue;
       el.focus();
       setter.call(el, digits[i]);
@@ -186,13 +224,6 @@ function buildAutofillScript(fields: AutofillFields): string {
       el.blur();
       any = true;
     }
-    // Belt and suspenders: the WebView is off-screen by default (see the
-    // screen's header comment), but focus() above still reaches the real
-    // OS keyboard even on an invisible native view — confirmed on device,
-    // 2026-09-22, the keyboard flickered up during "Refreshing
-    // information…". Blurring the field, and anything else that might
-    // still be focused, keeps the keyboard from ever appearing while this
-    // runs invisibly.
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     post(any ? "anumber_filled" : "anumber_already_filled");
     hideFilledFields();
@@ -222,6 +253,10 @@ function buildAutofillScript(fields: AutofillFields): string {
     waitFor(
       function () { return document.querySelector('input[id^="react-select"][id$="-input"]'); },
       guard("nationality_type", function (input) {
+        // Keyboard suppression only — NOT a blur (see startKeyboardSweep):
+        // react-select closes its menu on blur, which would kill the
+        // selection we're in the middle of making.
+        input.setAttribute("inputmode", "none");
         var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
         setter.call(input, target);
         input.dispatchEvent(new Event("input", { bubbles: true }));

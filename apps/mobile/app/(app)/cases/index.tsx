@@ -531,8 +531,35 @@ function CaseCard({
             {c.provider} · {displayCaseKey(c.case_key ?? "")}
             {c.form_type ? ` · ${c.form_type}` : ""}
           </Text>
-          <View style={{ marginTop: spacing.sm }}>
+          <View style={{ marginTop: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
             <StatusPill statusText={c.status_text_en} />
+            {/* Sits beside the status pill and matches its shape (user's
+                request, 2026-09-22). Same destination as tapping the card
+                — the refresh screen — rather than refreshing in place,
+                which would need an off-screen WebView per card instead of
+                the one shared screen. Nested Pressable + hitSlop for the
+                same reason as Archive/Remove below: it has to claim the
+                touch so tapping it doesn't also fire ListRow's onPress. */}
+            {(c.provider === "ceac" || c.provider === "eoir") && (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    c.provider === "ceac" ? `/cases/ceac-refresh/${c.tracked_case_id}` : `/cases/eoir-refresh/${c.tracked_case_id}`,
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Refresh this case"
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.border : colors.surfaceMuted,
+                  borderRadius: 999,
+                  paddingVertical: spacing.xs,
+                  paddingHorizontal: spacing.md,
+                })}
+              >
+                <Text style={{ color: colors.link, fontSize: fontSize.sm, fontWeight: "600" }}>↻ Refresh</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         {/* Pressable + hitSlop rather than <Text onPress>: these labels are
@@ -540,26 +567,6 @@ function CaseCard({
             ListRow's own Pressable — the nested Pressable is what reliably
             claims the touch so tapping "Remove" doesn't also navigate. */}
         <View style={{ gap: spacing.md, alignItems: "flex-end" }}>
-          {/* Same destination as tapping the card (user's choice,
-              2026-09-22, over refreshing in place — that would need an
-              off-screen WebView running per card instead of the one
-              shared refresh screen, more complexity/risk for a feature
-              not yet asked for). This is just an explicit, labeled way to
-              get there without relying on "the whole card is tappable"
-              being obvious. */}
-          {(c.provider === "ceac" || c.provider === "eoir") && (
-            <Pressable
-              onPress={() =>
-                router.push(
-                  c.provider === "ceac" ? `/cases/ceac-refresh/${c.tracked_case_id}` : `/cases/eoir-refresh/${c.tracked_case_id}`,
-                )
-              }
-              accessibilityRole="button"
-              hitSlop={12}
-            >
-              <Text style={{ fontSize: fontSize.xs, color: colors.link }}>↻ Refresh</Text>
-            </Pressable>
-          )}
           <Pressable
             onPress={() => onArchive(c.user_case_id!, isArchived)}
             accessibilityRole="button"
