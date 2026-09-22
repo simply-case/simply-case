@@ -216,6 +216,105 @@ const ERROR_CHECK_SCRIPT = `
 true;
 `;
 
+/**
+ * DIAGNOSTIC, added 2026-09-22 to answer two open questions at once:
+ *
+ *  1. Does CEAC have a structured endpoint underneath, the way EOIR's ACIS
+ *     turned out to (eoir-ws.../api/Case/GetCaseInfo)? That discovery
+ *     removed EOIR's need to scrape rendered HTML entirely, so it's worth
+ *     ruling in or out here. It could NOT be checked the way EOIR's was —
+ *     Cloudflare returns 403 to any request for ceac.state.gov from a
+ *     server/CLI (confirmed again 2026-09-22, and already documented in
+ *     HANDOFF.md for the other blocked sources). Only a real device gets
+ *     through, so the check has to run here rather than offline.
+ *
+ *  2. Why the page goes BLANK after submitting a CAPTCHA — reported
+ *     repeatedly by the user, never diagnosed. Whatever CEAC does on
+ *     submit (full postback or a partial XHR) this records it, including
+ *     how much text the resulting page actually has.
+ *
+ * Wraps BOTH fetch and XMLHttpRequest: CEAC is ASP.NET WebForms, and its
+ * UpdatePanel/MS-AJAX machinery uses XHR, not fetch — wrapping only fetch
+ * (which is all EOIR needed) would have seen nothing here. Everything is
+ * observe-only: the original call always runs and its result is returned
+ * untouched.
+ */
+const NETWORK_DIAGNOSTIC_SCRIPT = `
+(function () {
+  try {
+    if (window.__ceacDiagInstalled) return;
+    window.__ceacDiagInstalled = true;
+
+    function report(payload) {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: "ceac_diag" }, payload)));
+      } catch (e) {}
+    }
+
+    var scripts = [];
+    var nodes = document.querySelectorAll("script[src]");
+    for (var i = 0; i < nodes.length; i++) scripts.push(nodes[i].getAttribute("src"));
+    var bodyText = document.body ? (document.body.innerText || "") : "";
+    report({
+      kind: "page",
+      url: location.href,
+      scripts: scripts,
+      hasPageRequestManager: !!(window.Sys && window.Sys.WebForms && window.Sys.WebForms.PageRequestManager),
+      hasPageMethods: typeof window.PageMethods !== "undefined",
+      hasUpdatePanel: !!document.querySelector("[id*='UpdatePanel'], [id*='updatepanel']"),
+      formAction: document.forms && document.forms[0] ? document.forms[0].action : null,
+      bodyTextLength: bodyText.length,
+      bodyTextStart: bodyText.slice(0, 500)
+    });
+
+    var origFetch = window.fetch;
+    if (origFetch) {
+      window.fetch = function () {
+        var url = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+        return origFetch.apply(this, arguments).then(function (res) {
+          try {
+            res.clone().text().then(function (body) {
+              report({ kind: "fetch", url: String(url), status: res.status, bodyLength: body.length, bodyStart: body.slice(0, 1200) });
+            }).catch(function () {});
+          } catch (e) {}
+          return res;
+        });
+      };
+    }
+
+    var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (method, url) {
+      this.__ceacMethod = method;
+      this.__ceacUrl = url;
+      return origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function (body) {
+      var xhr = this;
+      try {
+        xhr.addEventListener("load", function () {
+          var text = "";
+          try { text = String(xhr.responseText || ""); } catch (e) {}
+          report({
+            kind: "xhr",
+            method: xhr.__ceacMethod,
+            url: String(xhr.__ceacUrl),
+            status: xhr.status,
+            requestBodyStart: body ? String(body).slice(0, 400) : null,
+            bodyLength: text.length,
+            bodyStart: text.slice(0, 1500)
+          });
+        });
+      } catch (e) {}
+      return origSend.apply(this, arguments);
+    };
+  } catch (e) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: "ceac_diag", kind: "error", message: String(e) })); } catch (e2) {}
+  }
+})();
+true;
+`;
+
 interface CaseInfo {
   userCaseId: string;
   nickname: string | null;
@@ -391,6 +490,13 @@ export default function CeacRefreshScreen() {
                   // same element.
                   setMessage({ text: data.message, isError: true });
                   console.log("[ceac error]", data.message);
+                } else if (data.type === "ceac_diag") {
+                  // See NETWORK_DIAGNOSTIC_SCRIPT. Logged, never shown —
+                  // this is for reading in the Metro terminal, not for the
+                  // user. Stringified whole so nested arrays/objects
+                  // (scripts list, response bodies) don't print as
+                  // "[Object]".
+                  console.log("[ceac diag]", JSON.stringify(data, null, 2));
                 }
               } catch {
                 // Not our message shape — ignore.
@@ -405,6 +511,12 @@ export default function CeacRefreshScreen() {
               // would be stale and confusing.
               setMessage(null);
               setDetectedStatus(null);
+
+              // FIRST, before anything else touches the page: the
+              // diagnostic has to wrap fetch/XHR before CEAC's own code
+              // has a chance to call them, or it misses the very requests
+              // it exists to observe.
+              webViewRef.current?.injectJavaScript(NETWORK_DIAGNOSTIC_SCRIPT);
 
               // CEAC's form posts back to the same URL rather than
               // navigating to a new one, so onNavigationStateChange
