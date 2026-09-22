@@ -398,12 +398,26 @@ for USCIS".
       received (matched on the URL containing `/api/Case/GetCaseInfo`; the
       original fetch always still runs and its result is returned
       untouched). Nothing about their site's usage changes and no captcha
-      service is needed. **Not yet tested against a real response** — the
-      screen shows whatever comes back as pretty-printed JSON, pre-filled
-      into the editable save box (never auto-saved), since the field names
-      for a successful response aren't known yet. Once the user gets a
-      real result on-device, formalize it into proper fields instead of
-      raw JSON.
+      service is needed.
+      **CONFIRMED WORKING on device, 2026-09-21** — the user's own real
+      case (A-Number `208492302`) returned a full successful payload,
+      captured cleanly by the interceptor. Real shape (see
+      `EoirCaseInfoResponse` in `eoir-refresh/[id].tsx`): `Data` (AlienName,
+      CaseID, OSC_Date, ElapsedDays, LatestHearingDate/Time, decision
+      strings, AppealFiled/ReopenExists/PendingAtBIA flags),
+      `Proceeding` (CaseType, HearingLocationAddress),
+      `Schedule` (AdjDate/AdjTime, IJ_Name, IJ_WebExURLLink,
+      HearingLocationAddress). `formatEoirResult()` turns this into labeled
+      rows (Next hearing, Location, Judge, Hearing link, Case type, Docket
+      date) shown in a card, plus a pre-filled editable summary — still
+      never auto-saved. Deliberately excludes `AlienName` from what gets
+      shown/saved: it's the user's own name, already known to them,
+      putting it in stored status text would be PII with no benefit.
+      Field meanings NOT confirmed by documentation (CaseType "RMV",
+      ClockStatus "R") are shown as raw codes, not translated — same
+      "never guess" principle as CEAC's error relay. Only one real sample
+      exists so far; the interface may not cover every response shape
+      (e.g. a case with an actual decision, or `ValidAlienNumber: false`).
     - **Call it directly:** mint an hCaptcha token via a solving service
       and call the API ourselves, no WebView. **Unverified:** whether a
       token minted off their page passes their server-side check
@@ -490,27 +504,39 @@ for USCIS".
    correct CAPTCHA is submitted — reading the real result page hasn't
    been tested. Once it is, build the two still-open safety-net items
    (§5): alert-on-breakage, and an HTML snapshot test fixture.
-4. ~~Add EOIR cases~~ Built 2026-09-17, `window.fetch` interceptor added
-   2026-09-21 (§5): A-Number + nationality autofill (A-Number confirmed
-   working on device; nationality fixed to match ACIS's real codes, not
-   yet re-tested), auto-accepted disclaimer, and the API-intercept path
-   instead of page scraping. **Next, in order:**
-   - **On-device test, both parts:** does nationality now land correctly
-     (India should no longer become British Indian Ocean Territory), and
-     does the interceptor actually capture a real `GetCaseInfo` response
-     after a real captcha solve + Submit tap? Neither has been tested on a
-     real device yet — this is the priority.
+4. ~~Add EOIR cases~~ Built 2026-09-17. `window.fetch` interceptor added
+   2026-09-21 and **confirmed working end-to-end on device** — real
+   A-Number, real captcha solve, real successful `GetCaseInfo` capture,
+   formatted into readable rows (§5 for the full field list). Same day:
+   auto-navigate straight to the refresh screen after adding an EOIR case
+   (`cases/add.tsx`); hides the A-Number/nationality fields once filled so
+   the visible page is mostly just the captcha and Submit; and an
+   auto-submit attempt (`watchForSubmit` in `buildAutofillScript`) that
+   polls for ACIS's Submit button to become enabled (i.e. captcha solved)
+   and clicks it — **UNVERIFIED whether the click itself is honored**;
+   ACIS sits behind Cloudflare same as CEAC, and Cloudflare silently
+   discarded every scripted click CEAC tried. Test this specifically: does
+   `submit_auto_clicked` appear in the log AND get followed by a real
+   `eoir_api_response`? If the click logs but nothing follows, that's the
+   same silent-discard pattern as CEAC — the case-detail summary hearing
+   below is where to confirm this on the next real device test.
+   **Next, in order:**
+   - **Confirm the auto-submit and field-hiding changes on device** —
+     untested as of this write-up (only the interceptor + formatter were
+     confirmed, before these were added).
    - **Migration `0015_eoir_refresh.sql` is written but BLOCKED, not
      pushed.** The push itself is denied by an automated policy in this
      environment (touches the shared database) — needs the user to run
-     `npm run db:push` (or approve it explicitly) directly. Until then,
+     `npx supabase db push --linked` directly (the plain `supabase` binary
+     isn't actually installed — only cached under npx — so the `db:push`
+     npm script as originally written doesn't work either; needs `npx`
+     prefixed or the CLI added as a real devDependency). Until pushed,
      `record_manual_status` doesn't exist server-side and **both CEAC and
      EOIR status-saving are broken** (the app already calls the new name).
-     Once pushed: `npm run db:types`.
-   - Once a real successful `GetCaseInfo` response has been seen: replace
-     the raw-JSON display with real next-hearing fields, a proper
-     case-detail layout, a classifier, and a Privacy Policy update for
-     A-Numbers.
+     Once pushed: `npx supabase gen types typescript --linked > packages/shared/src/database.types.ts`.
+   - Real case-detail layout/classifier for EOIR's structured fields
+     (currently a free-text status built from a template, like CEAC's),
+     and a Privacy Policy update for A-Numbers.
 6. Decide Visa Bulletin / processing times based on the probe result.
 7. Regenerate DB types; triage Dependabot.
 8. Real legal contact email (web `legal.ts` + mobile `lib/links.ts`) →

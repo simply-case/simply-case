@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { Linking, Pressable, ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 import * as WebBrowser from "expo-web-browser";
 import { router, useLocalSearchParams } from "expo-router";
@@ -97,17 +97,63 @@ function buildAutofillScript(fields: AutofillFields): string {
     };
   }
 
-  /** Polls for what() to return truthy, up to ~10s, then calls done(). */
-  function waitFor(what, done, missed) {
+  /** Polls for what() to return truthy, then calls done(). maxTries × 250ms
+   * is the timeout — defaults to ~10s, but the submit-button wait below
+   * passes a much longer one: it's waiting on the USER to solve the real
+   * captcha, which can take well over 10 seconds. */
+  function waitFor(what, done, missed, maxTries) {
     var tries = 0;
+    var limit = maxTries || 40;
     (function attempt() {
       var found;
       try { found = what(); } catch (e) { found = null; }
       if (found) return done(found);
-      if (++tries > 40) return missed();
+      if (++tries > limit) return missed();
       setTimeout(attempt, 250);
     })();
   }
+
+  // Hides fields once they're filled in, so the visible page is just the
+  // captcha and Submit — the user already gave us the A-Number and
+  // nationality on the add-case screen, no reason to show them again.
+  // Uses display:none on the actual containers (not a blanket selector),
+  // so this can never accidentally hide the captcha or Submit button.
+  var hideFilledFields = guard("hide_fields", function () {
+    var codeContainer = document.querySelector(".react-code-input");
+    if (codeContainer) codeContainer.style.setProperty("display", "none", "important");
+    var singleValue = document.querySelector('[class*="-singleValue"]');
+    var placeholder = document.querySelector('[id^="react-select"][id$="-placeholder"]');
+    var control = (singleValue && singleValue.closest('[class*="-control"]')) || (placeholder && placeholder.closest('[class*="-control"]'));
+    if (control) control.style.setProperty("display", "none", "important");
+  });
+
+  // Waits (up to ~5 minutes — however long the user takes on the real
+  // captcha) for ACIS's own Submit button to stop being disabled, which
+  // only happens once the A-Number, nationality, AND a real captcha solve
+  // are all valid — then clicks it. UNVERIFIED whether this actually
+  // works: ACIS also sits behind Cloudflare (seen in the GetCaseInfo
+  // response headers), and Cloudflare's bot-management silently discarded
+  // every script-triggered click CEAC ever tried (see buildAutofillScript
+  // for ceac-refresh). This is a different button — a plain React state
+  // toggle firing a fetch(), not an ASP.NET WebForms postback — so it
+  // might not be protected the same way, but that's a guess, not a known
+  // fact. If "submit_auto_clicked" logs but no eoir_api_response message
+  // ever follows, that's the same silent-discard pattern as CEAC, and the
+  // real Submit button (still visible) is the fallback either way.
+  var watchForSubmit = guard("submit", function () {
+    waitFor(
+      function () {
+        var btn = document.getElementById("btn_submit");
+        return btn && !btn.disabled ? btn : null;
+      },
+      function (btn) {
+        btn.click();
+        post("submit_auto_clicked");
+      },
+      function () { post("submit_never_enabled"); },
+      1200,
+    );
+  });
 
   var findAccept = guard("accept", function () {
     // Matched on exact button text: class="btn" is shared with other
@@ -138,6 +184,7 @@ function buildAutofillScript(fields: AutofillFields): string {
       any = true;
     }
     post(any ? "anumber_filled" : "anumber_already_filled");
+    hideFilledFields();
     return true;
   });
 
@@ -149,7 +196,11 @@ function buildAutofillScript(fields: AutofillFields): string {
 
     // Already set from a previous run? Leave it alone.
     var current = document.querySelector('[class*="-singleValue"]');
-    if (current && (current.textContent || "").trim() === target) return post("nationality_already_filled");
+    if (current && (current.textContent || "").trim() === target) {
+      post("nationality_already_filled");
+      hideFilledFields();
+      return;
+    }
 
     var control = placeholder.closest('[class*="-control"]') || placeholder.parentElement;
     if (!control) return post("nationality_control_not_found");
@@ -183,6 +234,7 @@ function buildAutofillScript(fields: AutofillFields): string {
             match.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
             match.click();
             post("nationality_filled");
+            setTimeout(hideFilledFields, 100);
           }),
           function () { post("nationality_options_never_appeared"); }
         );
@@ -220,6 +272,8 @@ function buildAutofillScript(fields: AutofillFields): string {
   );`
       : `post("nationality_not_saved");`
   }
+
+  watchForSubmit();
 })();
 true;
 `;
@@ -290,6 +344,133 @@ const FETCH_INTERCEPT_SCRIPT = `
 true;
 `;
 
+/**
+ * ACIS's GetCaseInfo response shape, reverse-engineered from ONE real
+ * successful response (2026-09-21, the user's own case) — every field is
+ * optional/nullable because a single sample can't confirm what's always
+ * present. Field meanings not confirmed by EOIR documentation are shown
+ * as their raw codes rather than translated (e.g. CaseType "RMV",
+ * ClockStatus "R") — guessing at a code's meaning risks stating something
+ * false as fact, the same principle as CEAC's status relay.
+ */
+interface EoirCaseInfoResponse {
+  Data?: {
+    ValidAlienNumber?: boolean;
+    AlienName?: string | null;
+    CaseID?: number | null;
+    OSC_Date?: string | null;
+    ElapsedDays?: string | null;
+    LatestHearingDate?: string | null;
+    LatestHearingTime?: string | null;
+    DocketDate?: string | null;
+    CaseDecisionString?: string | null;
+    MTRDecisionString?: string | null;
+    ReopenDecisionString?: string | null;
+    AppealDecisionString?: string | null;
+    AppealFiled?: boolean;
+    ReopenExists?: boolean;
+    PendingAtBIA?: boolean;
+  } | null;
+  Proceeding?: {
+    CaseType?: string | null;
+    HearingLocationAddress?: string | null;
+  } | null;
+  Schedule?: {
+    AdjDate?: string | null;
+    AdjTime?: string | null;
+    IJ_Name?: string | null;
+    IJ_WebExURLLink?: string | null;
+    HearingLocationAddress?: string | null;
+  } | null;
+}
+
+interface EoirResultRow {
+  label: string;
+  value: string;
+}
+
+function formatEoirDate(dateIso?: string | null, time?: string | null): string | null {
+  if (!dateIso) return null;
+  const d = new Date(dateIso);
+  if (Number.isNaN(d.getTime())) return time ? `${dateIso} ${time}` : dateIso;
+  const dateStr = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  return time ? `${dateStr} at ${time}` : dateStr;
+}
+
+function formatEoirAddress(raw?: string | null): string | null {
+  if (!raw) return null;
+  return raw
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+/**
+ * Turns the raw API response into a short, readable summary (pre-filled
+ * into the editable save box) plus a list of labeled rows shown above it.
+ * Deliberately does NOT show the applicant's name — it's the user's own
+ * case, they know their own name, and there's no reason to duplicate a
+ * piece of PII into the saved status text with no benefit.
+ */
+function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: EoirResultRow[] } {
+  const rows: EoirResultRow[] = [];
+  const lines: string[] = [];
+
+  if (res.Data?.ValidAlienNumber === false) {
+    return { summary: "The court's system didn't recognize this A-Number and nationality combination.", rows: [] };
+  }
+
+  const hearingWhen = formatEoirDate(res.Schedule?.AdjDate ?? res.Data?.LatestHearingDate, res.Schedule?.AdjTime ?? res.Data?.LatestHearingTime);
+  if (hearingWhen) {
+    rows.push({ label: "Next hearing", value: hearingWhen });
+    lines.push(`Next hearing: ${hearingWhen}`);
+  }
+
+  const location = formatEoirAddress(res.Schedule?.HearingLocationAddress ?? res.Proceeding?.HearingLocationAddress);
+  if (location) {
+    rows.push({ label: "Location", value: location });
+    lines.push(`Location: ${location}`);
+  }
+
+  if (res.Schedule?.IJ_Name) {
+    rows.push({ label: "Judge", value: res.Schedule.IJ_Name });
+    lines.push(`Judge: ${res.Schedule.IJ_Name}`);
+  }
+
+  if (res.Schedule?.IJ_WebExURLLink) {
+    rows.push({ label: "Hearing link", value: res.Schedule.IJ_WebExURLLink });
+  }
+
+  const decisions: Array<[string, string | null | undefined]> = [
+    ["Case decision", res.Data?.CaseDecisionString],
+    ["Motion decision", res.Data?.MTRDecisionString],
+    ["Reopened case decision", res.Data?.ReopenDecisionString],
+    ["Appeal decision", res.Data?.AppealDecisionString],
+  ];
+  for (const [label, value] of decisions) {
+    if (value) {
+      rows.push({ label, value });
+      lines.push(`${label}: ${value}`);
+    }
+  }
+
+  if (res.Data?.AppealFiled) lines.push("An appeal has been filed.");
+  if (res.Data?.PendingAtBIA) lines.push("Pending at the Board of Immigration Appeals.");
+  if (res.Data?.ReopenExists) lines.push("A motion to reopen exists on this case.");
+
+  if (res.Proceeding?.CaseType) rows.push({ label: "Case type", value: res.Proceeding.CaseType });
+
+  const docketDate = formatEoirDate(res.Data?.DocketDate ?? res.Data?.OSC_Date);
+  if (docketDate) rows.push({ label: "Docket date", value: docketDate });
+
+  if (lines.length === 0) {
+    lines.push("The court returned a response, but we couldn't find a hearing date or decision in it — check the details below.");
+  }
+
+  return { summary: lines.join("\n"), rows };
+}
+
 interface CaseInfo {
   userCaseId: string;
   nickname: string | null;
@@ -305,6 +486,7 @@ export default function EoirRefreshScreen() {
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const [autofilled, setAutofilled] = useState(false);
   const [resultText, setResultText] = useState("");
+  const [resultRows, setResultRows] = useState<EoirResultRow[]>([]);
   const [apiCaptured, setApiCaptured] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
@@ -443,16 +625,19 @@ export default function EoirRefreshScreen() {
                 } else if (data.type === "eoir_api_response") {
                   // The real GetCaseInfo response ACIS's own page received
                   // after the user's real captcha solve + Submit tap — see
-                  // FETCH_INTERCEPT_SCRIPT. Field names for a SUCCESSFUL
-                  // response aren't known yet (never seen a real one), so
-                  // this is shown as pretty-printed JSON rather than
-                  // pretending to parse fields we haven't confirmed. It's
+                  // FETCH_INTERCEPT_SCRIPT. formatEoirResult() only knows
+                  // fields confirmed from one real sample (2026-09-21); it
+                  // never throws on an unexpected shape (every field
+                  // optional), so an unfamiliar response just shows fewer
+                  // rows rather than crashing this screen. The result is
                   // only ever a starting point in the editable box below —
                   // never saved automatically.
                   console.log("[eoir api]", data.status, JSON.stringify(data.body ?? data.parseError));
                   if (data.ok && data.body) {
+                    const { summary, rows } = formatEoirResult(data.body);
                     setApiCaptured(true);
-                    setResultText(JSON.stringify(data.body, null, 2));
+                    setResultRows(rows);
+                    setResultText(summary);
                   } else if (data.body && typeof data.body.message === "string") {
                     // e.g. {"message":"Invalid Captcha Provided."} — same
                     // relay principle as CEAC's ERROR_CHECK_SCRIPT: show
@@ -483,13 +668,35 @@ export default function EoirRefreshScreen() {
           </Text>
         </Pressable>
 
+        {resultRows.length > 0 && (
+          <Card style={{ gap: spacing.sm }}>
+            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
+              What the court's system says
+            </Text>
+            {resultRows.map((row) => (
+              <View key={row.label} style={{ flexDirection: "row", gap: spacing.sm }}>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, width: 110 }}>{row.label}</Text>
+                {row.label === "Hearing link" ? (
+                  <Pressable onPress={() => Linking.openURL(row.value)} style={{ flex: 1 }}>
+                    <Text style={{ fontSize: fontSize.sm, color: colors.link, textDecorationLine: "underline" }}>
+                      Join hearing link
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Text style={{ fontSize: fontSize.sm, color: colors.text, flex: 1 }}>{row.value}</Text>
+                )}
+              </View>
+            ))}
+          </Card>
+        )}
+
         <Card style={{ gap: spacing.sm }}>
           <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
             What does the page say?
           </Text>
           <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
             {apiCaptured
-              ? "We caught the court's own answer below — check it over (it's raw data, not proofread) and edit it into something readable before saving."
+              ? "We put together a summary from the court's own answer above — check it over and edit it if needed before saving."
               : "Type what you see — a hearing date and location, a decision, or that no information was found — and we'll save it to this case."}
           </Text>
           <Input

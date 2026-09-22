@@ -450,7 +450,17 @@ function EoirForm({ onBack }: { onBack: () => void }) {
     }
 
     setSubmitting(false);
-    router.back();
+    // Straight to the refresh screen instead of back to the case list —
+    // the whole point of adding an EOIR case is the lookup, and this
+    // saves the user a second tap to get to it (user's request,
+    // 2026-09-21). replace() rather than push(): "back" from the refresh
+    // screen should return to the case list, not to this now-pointless
+    // add-case form.
+    if (userCase) {
+      router.replace(`/cases/eoir-refresh/${userCase.tracked_case_id}`);
+    } else {
+      router.back();
+    }
   }
 
   return (
