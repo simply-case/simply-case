@@ -7,6 +7,7 @@ import { parseCeacCaseKey } from "@mycasepro/shared";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
 import { type CeacDetails, getCeacDetails } from "@/lib/ceac-details";
+import { createBreakageReporter } from "@/lib/lookup-breakage";
 import { Button, Card } from "@/components/ui";
 
 const CEAC_URL = "https://ceac.state.gov/CEACStatTracker/Status.aspx";
@@ -410,6 +411,10 @@ export default function CeacRefreshScreen() {
   const [autofilled, setAutofilled] = useState(false);
   const webViewRef = useRef<WebView>(null);
   const loadCountRef = useRef(0);
+  // Tells the owner when CEAC's markup changes underneath us — see
+  // lib/lookup-breakage.ts for why this needs both a hit and a miss
+  // before it says anything.
+  const breakageRef = useRef(createBreakageReporter("ceac"));
 
   // docs/HANDOFF.md §5/§6: passport/surname/location, stored only on this
   // device (lib/ceac-details.ts). Collected on the Add-a-case screen
@@ -558,6 +563,7 @@ export default function CeacRefreshScreen() {
                   // for debugging against the real page.
                   if (typeof data.step === "string" && data.step.endsWith("_filled")) setAutofilled(true);
                   console.log("[ceac autofill]", data.step, data.message ?? "");
+                  if (typeof data.step === "string") breakageRef.current(data.step);
                 } else if (data.type === "ceac_error" && typeof data.message === "string") {
                   // CEAC's own error text, relayed verbatim — see
                   // ERROR_CHECK_SCRIPT for why this reads a specific

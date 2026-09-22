@@ -308,9 +308,45 @@ for USCIS".
     non-empty rather than overwriting it. (2) status is never saved
     without the user confirming what's on screen (the "We noticed the
     page mentions: X" → tap to record flow, unchanged since Phase F).
-    (4) and (5) — an ops_alerts-style breakage alert, and an HTML
-    snapshot test fixture — are NOT built yet; revisit once the CAPTCHA
-    flow is confirmed working end to end.
+    **(4) and (5) BUILT 2026-09-22**, for both CEAC and EOIR:
+    - **(4) Breakage alert.** `report_lookup_breakage` (migration
+      **0016 — written, NOT yet pushed**) emails the owner, reusing the
+      polling watchdog's machinery exactly: same `ops_alerts` table, same
+      Vault-sourced Resend credentials, same fail-closed-when-unconfigured
+      behaviour, same once-per-6-hours de-duplication. It's reported by
+      the CLIENT because only a device can see these pages at all
+      (ceac.state.gov 403s anything server-side), so it's hardened for
+      that: the step name is matched against a fixed allowlist rather than
+      emailed as free text, and de-duplication happens before the send, so
+      it can't be used to push arbitrary content into the owner's inbox.
+      **The interesting half is what it refuses to report.** A page that
+      never loaded (offline, Cloudflare challenge) emits exactly the same
+      `*_not_found` steps as a page whose markup changed. Alerting on both
+      would mean alerting on every bad connection, and an alert that cries
+      wolf gets ignored — strictly worse than none. So it only fires when
+      SOME expected element was found and ANOTHER was missing: the page
+      loaded and largely parsed, and something specific moved. That
+      judgement is pure and unit-tested in
+      `packages/shared/src/breakage.ts` (+ `.test.ts`, 9 tests, mostly
+      about staying silent); `apps/mobile/lib/lookup-breakage.ts` is just
+      the plumbing around it.
+    - **(5) Fixture tests.** `packages/shared/src/eoir.test.ts` — 16 tests
+      pinned against the REAL captured ACIS response (name redacted, repo
+      is public), keeping EOIR's genuine quirks rather than idealizing
+      them. Required moving the parsing out of the screen into
+      `packages/shared/src/eoir.ts`: the test runner only globs
+      `packages/shared/src/*.test.ts` and
+      `supabase/functions/_shared/*.test.ts`, so anything living in a
+      `.tsx` screen is uncoverable by construction. Worth knowing for the
+      CEAC side too, which still has no equivalent — its parsing is still
+      inline in the screen, and a CEAC fixture can't be captured the way
+      EOIR's was anyway (403 to any server-side fetch; it would have to be
+      pasted from a device).
+      **Limit, stated plainly:** a frozen fixture CANNOT detect the
+      government changing their response. Nothing offline can. It catches
+      us breaking our own parsing — the likelier failure, and the one that
+      would silently show someone the wrong hearing date. Upstream change
+      is what (4) is for. The two are complements, not alternatives.
   - Degrading gracefully means: the "Show the CEAC page" toggle (see §9)
     reveals the real form so the user can finish it by hand — autofilled
     fields carry over since it's the same underlying page, just made

@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
 import { type EoirDetails, getEoirDetails } from "@/lib/eoir-details";
+import { createBreakageReporter } from "@/lib/lookup-breakage";
 import { eoirNationalityLabel, findEoirNationality } from "@/lib/eoir-nationalities";
 // Parsing/formatting lives in shared so it can be unit-tested against a
 // real captured API response — see packages/shared/src/eoir.test.ts.
@@ -435,6 +436,14 @@ export default function EoirRefreshScreen() {
   const [webViewKey, setWebViewKey] = useState(0);
   const webViewRef = useRef<WebView>(null);
   const helpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Fresh reporter per refresh attempt (keyed on webViewKey, which
+  // startRefresh bumps) — each attempt gets its own judgement about
+  // whether the page looked broken, rather than one verdict for the
+  // lifetime of the screen.
+  const breakageRef = useRef(createBreakageReporter("eoir"));
+  useEffect(() => {
+    breakageRef.current = createBreakageReporter("eoir");
+  }, [webViewKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -702,6 +711,7 @@ export default function EoirRefreshScreen() {
                 const data = JSON.parse(event.nativeEvent.data);
                 if (data.type === "autofill_status") {
                   console.log("[eoir autofill]", data.step, data.message ?? "");
+                  if (typeof data.step === "string") breakageRef.current(data.step);
                 } else if (data.type === "eoir_api_response") {
                   // The real GetCaseInfo response ACIS's own page received —
                   // see FETCH_INTERCEPT_SCRIPT. formatEoirResult() only
