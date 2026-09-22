@@ -46,11 +46,33 @@ const CEAC_STATUS_CLASS: Record<string, StatusClass> = {
   refused: "denied",
 };
 
+/**
+ * EOIR's status_text_en is a short canonical phrase WE generate
+ * (formatEoirResult, cases/eoir-refresh/[id].tsx) from structured API
+ * fields — never the long "Your next hearing is..." sentence, which lives
+ * in status_detail_en instead. Same reasoning as CEAC_STATUS_CLASS: an
+ * exact match on a controlled short vocabulary can't collide with
+ * anything else, unlike trying to pattern-match a full paragraph.
+ *
+ * "Decision issued" is deliberately its own bucket, not approved/denied —
+ * no real CaseDecisionString has been seen yet to know if EOIR's wording
+ * matches USCIS's (which the generic patterns below WOULD catch, if the
+ * decision text itself becomes the status_text_en — see formatEoirResult).
+ * This entry only fires for the generic "a decision exists but we
+ * couldn't get its text" case.
+ */
+const EOIR_STATUS_CLASS: Record<string, StatusClass> = {
+  "hearing scheduled": "pending",
+  "appeal or motion pending": "inProgress",
+  "decision issued": "unknown",
+  "no information found": "unknown",
+};
+
 export function classifyStatus(statusText: string | null | undefined): StatusClass {
   if (!statusText) return "unknown";
   const s = statusText.toLowerCase();
 
-  const exact = CEAC_STATUS_CLASS[s.trim()];
+  const exact = CEAC_STATUS_CLASS[s.trim()] ?? EOIR_STATUS_CLASS[s.trim()];
   if (exact) return exact;
 
   // --- Terminal negative outcomes -----------------------------------------

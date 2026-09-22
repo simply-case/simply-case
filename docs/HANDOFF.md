@@ -566,12 +566,47 @@ for USCIS".
      - A small top-right "↻ Refresh" button re-runs the whole flow
        (remounts the WebView via a `key` bump, not `.reload()` — cleaner
        reset of the fetch-interceptor guard).
+   - **2026-09-22 fixes**, all confirmed against real device feedback:
+     `blur()` after every autofilled field (a `focus()` call on a
+     react-code-input box reached the OS keyboard even off-screen — visible
+     as a keyboard flicker during "Refreshing information…");
+     `formatEoirAddress` drops a redundant repeated-city first segment
+     (ACIS's `HearingLocationAddress` spells the city out in segment 1 AND
+     abbreviates it in segment 3 — was rendering "SEATTLE, WASHINGTON,
+     915 2ND AVENUE..., SEATTLE, WA 98174"); the WebEx hearing link only
+     shows when `HearingMedium !== "P"` (no point showing a virtual-hearing
+     link for an in-person one); removed the "didn't save" message
+     entirely per the user (save failures are silent/logged-only now).
+   - **Status pill wired up 2026-09-22.** EOIR now saves a SHORT canonical
+     `status_text_en` (one of "Hearing scheduled", "Appeal or motion
+     pending", "Decision issued", "No information found" —
+     `formatEoirResult`'s new priority order, most-specific-first) plus the
+     long human sentence in `status_detail_en`, mirroring USCIS's own
+     text/detail split rather than cramming everything into one field and
+     trying to pattern-match a paragraph. `EOIR_STATUS_CLASS` in
+     `packages/shared/src/status.ts` maps those four phrases into the
+     SAME 6 StatusClasses every provider uses (exact match, same pattern
+     as `CEAC_STATUS_CLASS`) — confirmed by the user: hearing scheduled →
+     `pending` (not `actionNeeded`, despite USCIS treating a scheduled
+     interview that way — user's explicit call, EOIR hearings read calmer
+     than "act now"). "Decision issued" deliberately stays `unknown` —
+     no real `CaseDecisionString` has been seen yet, so guessing
+     approved/denied from wording never seen would be exactly the kind of
+     false-positive `classifyStatus`'s own header comment warns against.
+   - **A `↻ Refresh` link added to CEAC/EOIR cards on the case list**
+     (`cases/index.tsx`) — same destination as tapping the card (the
+     refresh screen), just an explicit labeled affordance. A "refresh
+     all" batch feature was discussed but not built: the safe design is a
+     QUEUE (one shared hidden WebView, step through cases one at a time,
+     "Refreshing 2 of 5…"), not several WebViews running in parallel —
+     revisit once single-card refresh has proven solid.
    - **Not yet done:** a real case-detail layout for EOIR (this screen
      doubles as both "refresh" and "detail" now; `cases/[id].tsx`'s
      generic detail view still shows EOIR cases with a plain USCIS-style
-     status pill, not the structured fields), a Privacy Policy update for
-     A-Numbers, and the two still-open CEAC safety-net items (§5):
-     alert-on-breakage and an HTML snapshot test fixture.
+     status pill, not the structured fields — though that pill is now
+     meaningful, see above), a Privacy Policy update for A-Numbers, and
+     the two still-open CEAC safety-net items (§5): alert-on-breakage and
+     an HTML snapshot test fixture.
 6. Decide Visa Bulletin / processing times based on the probe result.
 7. Regenerate DB types; triage Dependabot.
 8. Real legal contact email (web `legal.ts` + mobile `lib/links.ts`) →

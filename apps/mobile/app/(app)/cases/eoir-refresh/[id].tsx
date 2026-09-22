@@ -484,23 +484,40 @@ function formatEoirAddress(raw?: string | null): string | null {
 }
 
 /**
- * Turns the raw API response into a short, readable summary (saved as the
- * case's status text — see recordStatus) plus a list of "everything else"
- * rows: decisions, appeal/reopen flags, the hearing link. Name, A-Number,
- * docket date, the headline hearing sentence, judge and court address are
- * NOT in `rows` — the screen renders those directly as dedicated fields in
- * a fixed order per the user's request, not as a generic label/value list.
- * Deliberately does NOT include the applicant's name in the SAVED summary
- * — it's the user's own case, they know their own name, and there's no
+ * Turns the raw API response into what gets SAVED (statusText, a short
+ * canonical phrase — see EOIR_STATUS_CLASS in packages/shared/src/status.ts
+ * for what each one classifies to; statusDetail, the long human sentence)
+ * plus a list of "everything else" rows: decisions, appeal/reopen flags,
+ * the hearing link. Name, A-Number, docket date, the headline hearing
+ * sentence, judge and court address are NOT in `rows` — the screen renders
+ * those directly as dedicated fields in a fixed order per the user's
+ * request, not as a generic label/value list.
+ *
+ * statusText is deliberately SHORT and from a small controlled vocabulary
+ * — an earlier version tried to save the whole multi-line summary as the
+ * status and pattern-match it for classification, which is exactly the
+ * fragile "guess at a paragraph" approach the rest of this app avoids
+ * (see status.ts's own header comment on why CEAC uses exact short
+ * strings). Two fields, like USCIS's status_text_en/status_detail_en
+ * split, not one long one.
+ *
+ * Deliberately does NOT include the applicant's name in what's SAVED —
+ * it's the user's own case, they know their own name, and there's no
  * reason to put a piece of PII into stored status text with no benefit
  * (it's still shown live on this screen, just not persisted this way).
  */
-function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: EoirResultRow[] } {
+function formatEoirResult(
+  res: EoirCaseInfoResponse,
+): { statusText: string; statusDetail: string; rows: EoirResultRow[] } {
   const rows: EoirResultRow[] = [];
   const lines: string[] = [];
 
   if (res.Data?.ValidAlienNumber === false) {
-    return { summary: "The court's system didn't recognize this A-Number and nationality combination.", rows: [] };
+    return {
+      statusText: "No information found",
+      statusDetail: "The court's system didn't recognize this A-Number and nationality combination.",
+      rows: [],
+    };
   }
 
   const headline = formatEoirHeadline(res);
@@ -524,10 +541,12 @@ function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: E
     ["Reopened case decision", res.Data?.ReopenDecisionString],
     ["Appeal decision", res.Data?.AppealDecisionString],
   ];
+  let hasDecision = false;
   for (const [label, value] of decisions) {
     if (value) {
       rows.push({ label, value });
       lines.push(`${label}: ${value}`);
+      hasDecision = true;
     }
   }
 
@@ -535,11 +554,23 @@ function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: E
   if (res.Data?.PendingAtBIA) lines.push("Pending at the Board of Immigration Appeals.");
   if (res.Data?.ReopenExists) lines.push("A motion to reopen exists on this case.");
 
-  if (lines.length === 0) {
+  const hasAppealOrMotion = Boolean(res.Data?.AppealFiled || res.Data?.PendingAtBIA || res.Data?.ReopenExists);
+
+  // Priority order, most specific/certain first — mirrors classifyStatus's
+  // own "most specific pattern wins" philosophy (status.ts).
+  let statusText: string;
+  if (hasDecision) {
+    statusText = "Decision issued";
+  } else if (hasAppealOrMotion) {
+    statusText = "Appeal or motion pending";
+  } else if (headline) {
+    statusText = "Hearing scheduled";
+  } else {
+    statusText = "No information found";
     lines.push("The court returned a response, but we couldn't find a hearing date or decision in it — check the details below.");
   }
 
-  return { summary: lines.join("\n"), rows };
+  return { statusText, statusDetail: lines.join("\n"), rows };
 }
 
 interface CaseInfo {
@@ -617,11 +648,12 @@ export default function EoirRefreshScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [info, webViewKey]);
 
-  async function saveResult(summary: string) {
+  async function saveResult(statusText: string, statusDetail: string) {
     if (!info) return;
     const { error } = await supabase.rpc("record_manual_status", {
       p_user_case_id: info.userCaseId,
-      p_status_text: summary,
+      p_status_text: statusText,
+      p_status_detail: statusDetail,
     });
     // Best-effort, silent: this is a background sync, not something the
     // user is waiting on — the live result is already on screen either
@@ -833,11 +865,11 @@ export default function EoirRefreshScreen() {
                   console.log("[eoir api]", data.status, JSON.stringify(data.body ?? data.parseError));
                   clearHelpTimer();
                   if (data.ok && data.body) {
-                    const { summary, rows } = formatEoirResult(data.body);
+                    const { statusText, statusDetail, rows } = formatEoirResult(data.body);
                     setLiveResult(data.body);
                     setResultRows(rows);
                     setStatus("ready");
-                    saveResult(summary);
+                    saveResult(statusText, statusDetail);
                   } else if (data.body && typeof data.body.message === "string") {
                     // e.g. {"message":"Invalid Captcha Provided."} — same
                     // relay principle as CEAC's ERROR_CHECK_SCRIPT: show
