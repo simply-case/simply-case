@@ -217,6 +217,83 @@ true;
 `;
 
 /**
+ * THE FIX for the long-standing "page goes blank after I submit the
+ * CAPTCHA and no error ever shows" bug, root-caused 2026-09-22 by the
+ * diagnostic below.
+ *
+ * Submitting CEAC is NOT a page load. It's an ASP.NET UpdatePanel partial
+ * postback over XHR (`__EVENTTARGET=ctl00$ContentPlaceHolder1$btnSubmit`,
+ * response `1|#||4|12085|updatePanel|...`, 16KB, HTTP 200 — captured live
+ * from a real submission). CEAC answers perfectly well; the request was
+ * never the problem.
+ *
+ * The problem was entirely ours: ERROR_CHECK_SCRIPT and EXTRACTION_SCRIPT
+ * were only ever injected from `onLoadEnd`, and onLoadEnd NEVER FIRES for
+ * a partial postback because no page loads. So the app stopped looking at
+ * the page at exactly the moment CEAC put the answer on it — every
+ * submission, every time. Nothing was blank; we just weren't watching.
+ *
+ * Fix: register a handler with ASP.NET AJAX's own PageRequestManager,
+ * which fires after every partial postback completes and the DOM has been
+ * updated. That's the framework's intended hook for this, and it fires
+ * whether the submission came from a real tap or anything else. Runs the
+ * same two checks that already work — same element ids, same status
+ * words — just at a moment when they can actually see the result.
+ */
+const PARTIAL_POSTBACK_HOOK_SCRIPT = `
+(function () {
+  try {
+    if (window.__ceacPostbackHooked) return;
+
+    function check() {
+      try {
+        var errorEl = document.getElementById("ctl00_ContentPlaceHolder1_lblError");
+        var errorText = errorEl ? errorEl.textContent.trim() : "";
+        if (errorText) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: "ceac_error", message: errorText }));
+        }
+        var statuses = ${JSON.stringify(COMMON_STATUSES)};
+        var text = document.body ? document.body.innerText : "";
+        for (var i = 0; i < statuses.length; i++) {
+          if (text.indexOf(statuses[i]) !== -1) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: "status_found", status: statuses[i] }));
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Sys is loaded by ASP.NET's own ScriptResource.axd bundles; it exists
+    // by the time onLoadEnd fires (confirmed: hasPageRequestManager true),
+    // but poll briefly rather than assume, since a slow script load would
+    // otherwise silently lose the hook — the exact failure mode that hid
+    // this bug for weeks.
+    var tries = 0;
+    (function attach() {
+      if (window.Sys && window.Sys.WebForms && window.Sys.WebForms.PageRequestManager) {
+        window.Sys.WebForms.PageRequestManager.getInstance().add_endRequest(function () {
+          // The DOM is updated by the time endRequest fires, but give
+          // the panel a tick to settle before reading it.
+          setTimeout(check, 150);
+        });
+        window.__ceacPostbackHooked = true;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: "autofill_status", step: "postback_hook_attached" }));
+        return;
+      }
+      if (++tries > 40) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: "autofill_status", step: "postback_hook_unavailable" }));
+        return;
+      }
+      setTimeout(attach, 250);
+    })();
+  } catch (e) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: "autofill_status", step: "postback_hook_error", message: String(e) })); } catch (e2) {}
+  }
+})();
+true;
+`;
+
+/**
  * DIAGNOSTIC, added 2026-09-22 to answer two open questions at once:
  *
  *  1. Does CEAC have a structured endpoint underneath, the way EOIR's ACIS
@@ -517,6 +594,12 @@ export default function CeacRefreshScreen() {
               // has a chance to call them, or it misses the very requests
               // it exists to observe.
               webViewRef.current?.injectJavaScript(NETWORK_DIAGNOSTIC_SCRIPT);
+
+              // The real fix for "nothing happens after I submit" — see
+              // PARTIAL_POSTBACK_HOOK_SCRIPT. Everything below this line
+              // only ever runs on a full page load, which a CEAC
+              // submission is not.
+              webViewRef.current?.injectJavaScript(PARTIAL_POSTBACK_HOOK_SCRIPT);
 
               // CEAC's form posts back to the same URL rather than
               // navigating to a new one, so onNavigationStateChange

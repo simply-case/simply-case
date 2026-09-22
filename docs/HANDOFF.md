@@ -500,10 +500,43 @@ for USCIS".
    - Track the USCIS 5-day streak (§3 #4), then email USCIS for
      production access.
 3. ~~CEAC autofill + in-app CAPTCHA~~ Built 2026-09-16 (§9) against the
-   real page's element ids. **Not yet confirmed:** what happens after a
-   correct CAPTCHA is submitted — reading the real result page hasn't
-   been tested. Once it is, build the two still-open safety-net items
-   (§5): alert-on-breakage, and an HTML snapshot test fixture.
+   real page's element ids.
+   **ROOT CAUSE FOUND 2026-09-22 for the long-standing "page goes blank
+   after I submit the CAPTCHA, no error ever shows" bug** — reported by
+   the user repeatedly across many sessions and never diagnosed until a
+   runtime fetch/XHR diagnostic was run on a real device
+   (`NETWORK_DIAGNOSTIC_SCRIPT`, still in `ceac-refresh/[id].tsx`):
+   - **Submitting CEAC is not a page load.** It's an ASP.NET UpdatePanel
+     **partial postback over XHR** — `POST .../Status.aspx` with
+     `__EVENTTARGET=ctl00$ContentPlaceHolder1$btnSubmit`, responding HTTP
+     200 with ~16KB in MS-AJAX's delimited format
+     (`1|#||4|12085|updatePanel|ctl00_ContentPlaceHolder1_UpdatePanel1|…`).
+     Page confirms `hasPageRequestManager: true`, `hasUpdatePanel: true`.
+     CEAC answers fine; the request was never the problem.
+   - **The bug was ours.** `ERROR_CHECK_SCRIPT` and `EXTRACTION_SCRIPT`
+     were only injected from `onLoadEnd`, and **onLoadEnd never fires for
+     a partial postback** — so the app stopped looking at the page at
+     exactly the moment CEAC put the answer on it. Nothing was blank; we
+     just weren't watching. This is why the wrong-CAPTCHA error never
+     appeared no matter how correct the element targeting was.
+   - **Fix: `PARTIAL_POSTBACK_HOOK_SCRIPT`** registers a handler with
+     ASP.NET AJAX's own `Sys.WebForms.PageRequestManager.add_endRequest`,
+     which fires after every partial postback once the DOM is updated, and
+     re-runs the same two checks. Logs `postback_hook_attached` /
+     `postback_hook_unavailable` so a lost hook is visible instead of
+     silent — the exact failure mode that hid this for weeks.
+     **Not yet re-tested on device as of this write-up.**
+   - **CEAC has NO JSON API**, unlike EOIR — checked properly this time,
+     not assumed. The submit response is HTML inside the MS-AJAX envelope.
+     It IS interceptable via XHR though (proven by the diagnostic), so if
+     DOM reading ever proves unreliable, parsing the intercepted response
+     body is a viable fallback.
+   - Also worth knowing: `ceac.state.gov` returns **403 to any
+     server/CLI request** (Cloudflare), so this could only be
+     investigated from a real device. Its CAPTCHA is served from
+     `remote.captcha.com` (BotDetect).
+   Still open after this: the two safety-net items (§5) —
+   alert-on-breakage, and an HTML snapshot test fixture.
 4. ~~Add EOIR cases~~ Built 2026-09-17. Fully automated end-to-end,
    **confirmed on device 2026-09-21 including auto-submit — with a real
    A-Number, no visible captcha challenge appeared at all** (hCaptcha can
