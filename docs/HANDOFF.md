@@ -492,18 +492,52 @@ for USCIS".
     designed twice.
 - **Data retention:** keep user data until the user deletes their account.
   Saving a Visa Bulletin priority date is OK.
-- **Visa Bulletin (not built):** daily cron storing the full bulletin plus
-  the raw HTML, alerting on parse failure. Personalization ("your date is
-  current") is the valuable part.
-- **Processing times (not built):** USCIS JSON endpoint
-  (`egov.uscis.gov/processing-times/api/…`) shown on case detail with no
-  user input, plus NVC timeframes.
-- **Cloudflare blocks those sources** (Visa Bulletin, NVC timeframes, USCIS
-  processing times) from Supabase's servers: 403, confirmed 2026-09-12.
-  USCIS newsroom and the Federal Register are fine. Plan: run the GitHub
-  Actions probe (§3 item 7). **If GitHub is also blocked, skip F2/F3 for
-  the beta** and keep them as Resources links. A paid proxy (~$50/mo) is
-  the post-beta option.
+- **Visa Bulletin / processing times / NVC timeframes: DECIDED 2026-09-22
+  after the probe came back. See the block below — the old "buy a proxy"
+  assumption was WRONG and is retired.**
+- **What the probe actually showed.** The GitHub Actions probe (run
+  2026-09-17) returned 403 + Cloudflare challenge for the Visa Bulletin,
+  NVC timeframes, and the USCIS processing-times endpoint — i.e. GitHub is
+  blocked too, same as Supabase Edge. Then, 2026-09-22, the same URLs were
+  tried from the owner's own laptop on a home connection:
+  - plain `curl` from a **residential IP**: still 403 + challenge.
+  - **headless Chrome** from that same residential IP: still challenged.
+  - Federal Register API: **200, fine** — the probe's earlier
+    `curl_error` on it was transient, not a block.
+  **So this was never about IP reputation.** Cloudflare is serving a
+  JavaScript challenge that a real, interactively-used browser passes and
+  an automated client does not, wherever it runs from. **A residential
+  proxy would not fix it** — it changes the IP, not the thing being
+  detected. Don't spend the ~$50/mo the old note suggested; it was based
+  on a wrong diagnosis.
+- **Processing times: NOT BUILDING IT. Link out instead.** The USCIS
+  *developer* API (`api.uscis.gov`, which we already call successfully for
+  case status from Supabase Edge — so USCIS is not blocking us) has only
+  two APIs in its catalog: **Case Status and FOIA. There is no processing
+  times API** (developer.uscis.gov/apis, checked 2026-09-22). The only
+  machine-readable source is the `egov.uscis.gov` endpoint, which is
+  Cloudflare-gated per above. No sanctioned path exists, so the Resources
+  tab links to the official page and that's the end of it.
+- **Visa Bulletin: link out now; owner-ingested later if wanted.** The
+  valuable part was always personalization ("your date is current") and
+  alerting, both of which need the data server-side. The realistic way to
+  get it there, given the above, is **owner-ingestion rather than
+  scraping**: the bulletin is ONE document published roughly monthly, so
+  a human (or a real browser the owner drives) putting it into Supabase
+  once a month is entirely tractable — and unlike a scraper it needs no
+  bot-evasion, can't silently break, and is trustworthy by construction.
+  Two other routes considered and not chosen for now:
+  - *Fetch via the app's WebView on the user's device* — the only
+    automated path proven to work (it's how CEAC/EOIR get through). Fine
+    for on-device personalization, but it can't power server-side email
+    alerts unless devices upload what they parsed, and accepting
+    client-submitted bulletin data means one bad client could feed
+    everyone wrong dates. Not worth that for a monthly document.
+  - *State Dept's own email subscription (GovDelivery)* — a sanctioned
+    distribution channel rather than routing around bot protection, and
+    genuinely the "front door". Needs inbound-email handling we don't
+    have (Resend is outbound-only). Worth revisiting if monthly manual
+    ingestion becomes annoying.
 - **Range search (not built):** official USCIS API only, async job queue,
   a **global rate limiter in Postgres** (10 TPS is the account ceiling,
   shared with polling), cache every scanned receipt, ~5 scans per user per
@@ -676,7 +710,13 @@ for USCIS".
      meaningful, see above), a Privacy Policy update for A-Numbers, and
      the two still-open CEAC safety-net items (§5): alert-on-breakage and
      an HTML snapshot test fixture.
-6. Decide Visa Bulletin / processing times based on the probe result.
+6. ~~Decide Visa Bulletin / processing times based on the probe result~~
+   **Decided 2026-09-22 (§5): both link out for now.** Processing times
+   has no sanctioned source at all (no USCIS processing-times API exists);
+   the Visa Bulletin can be owner-ingested monthly if/when personalization
+   and alerts are wanted. The probe also retired the "buy a ~$50/mo proxy"
+   plan — the block is a JS challenge, not IP reputation, so a proxy
+   wouldn't have helped.
 7. Regenerate DB types; triage Dependabot.
 8. Real legal contact email (web `legal.ts` + mobile `lib/links.ts`) →
    Phase E (domain, Resend sender, re-enable confirmations +

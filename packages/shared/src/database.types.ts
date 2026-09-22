@@ -579,9 +579,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      // Hand-patched for migration 0016 (not yet applied to production) —
-      // regenerate with `npx supabase gen types typescript --linked` from
-      // the repo root after `npx supabase db push --linked`.
       report_lookup_breakage: {
         Args: {
           p_provider: Database["public"]["Enums"]["case_provider"]
