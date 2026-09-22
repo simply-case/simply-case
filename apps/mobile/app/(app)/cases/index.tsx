@@ -25,10 +25,11 @@ const APP_ICON = require("../../../assets/app-icon.png");
 /** What a case "is" for filtering purposes — collapses CEAC's two case
  * shapes (see parseCeacCaseKey) into the two labels the user actually
  * chose between when adding it (see cases/add.tsx's CASE_TYPES). */
-type CaseTypeFilter = "uscis" | "nvc" | "ds160";
+type CaseTypeFilter = "uscis" | "nvc" | "ds160" | "eoir";
 
 function caseTypeOf(c: CaseRow): CaseTypeFilter | null {
   if (c.provider === "uscis") return "uscis";
+  if (c.provider === "eoir") return "eoir";
   if (c.provider === "ceac") {
     const parsed = parseCeacCaseKey(c.case_key ?? "");
     if (parsed?.type === "immigrant") return "nvc";
@@ -41,6 +42,7 @@ const CASE_TYPE_LABELS: Record<CaseTypeFilter, string> = {
   uscis: "USCIS",
   nvc: "NVC case",
   ds160: "Visa application (DS-160)",
+  eoir: "Immigration court",
 };
 
 type SortOption = "recent" | "added" | "az" | "status";
@@ -505,15 +507,18 @@ function CaseCard({
   return (
     <ListRow
       onPress={() =>
-        // CEAC cases go straight into the refresh screen (which auto-loads
-        // the CEAC page) instead of the generic detail screen with a
-        // "Refresh from State Department" button first — one less tap to
+        // CEAC and EOIR cases go straight into their refresh screen (which
+        // auto-loads the real government page) instead of the generic
+        // detail screen with a "Refresh" button first — one less tap to
         // get to the thing the user actually opened the case for.
         // History/status are still one link away from there (see
-        // ceac-refresh/[id].tsx), so nothing is lost.
+        // ceac-refresh/[id].tsx and eoir-refresh/[id].tsx), so nothing is
+        // lost.
         c.provider === "ceac"
           ? router.push(`/cases/ceac-refresh/${c.tracked_case_id}`)
-          : router.push(`/cases/${c.tracked_case_id}`)
+          : c.provider === "eoir"
+            ? router.push(`/cases/eoir-refresh/${c.tracked_case_id}`)
+            : router.push(`/cases/${c.tracked_case_id}`)
       }
       style={isArchived ? { opacity: 0.65 } : undefined}
     >
@@ -526,8 +531,35 @@ function CaseCard({
             {c.provider} · {displayCaseKey(c.case_key ?? "")}
             {c.form_type ? ` · ${c.form_type}` : ""}
           </Text>
-          <View style={{ marginTop: spacing.sm }}>
+          <View style={{ marginTop: spacing.sm, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
             <StatusPill statusText={c.status_text_en} />
+            {/* Sits beside the status pill and matches its shape (user's
+                request, 2026-09-22). Same destination as tapping the card
+                — the refresh screen — rather than refreshing in place,
+                which would need an off-screen WebView per card instead of
+                the one shared screen. Nested Pressable + hitSlop for the
+                same reason as Archive/Remove below: it has to claim the
+                touch so tapping it doesn't also fire ListRow's onPress. */}
+            {(c.provider === "ceac" || c.provider === "eoir") && (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    c.provider === "ceac" ? `/cases/ceac-refresh/${c.tracked_case_id}` : `/cases/eoir-refresh/${c.tracked_case_id}`,
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Refresh this case"
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.border : colors.surfaceMuted,
+                  borderRadius: 999,
+                  paddingVertical: spacing.xs,
+                  paddingHorizontal: spacing.md,
+                })}
+              >
+                <Text style={{ color: colors.link, fontSize: fontSize.sm, fontWeight: "600" }}>↻ Refresh</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         {/* Pressable + hitSlop rather than <Text onPress>: these labels are

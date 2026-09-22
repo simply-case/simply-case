@@ -46,6 +46,24 @@ export default function PrivacyPage() {
             <li>A push-notification device token, once push notifications are available and you enable them.</li>
             <li>If you use the Visa Bulletin personalization feature: your selected category, country, and priority date.</li>
             <li>If you use visa-status (CEAC) tracking: the case or application identifier you enter.</li>
+            <li>If you track an immigration court (EOIR) case: the A-Number you enter. An A-Number is a government identification number, and we treat it with the same care as any other case identifier you give us.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="font-semibold">What stays only on your phone</h2>
+          <p className="mt-1 text-[var(--color-text-muted)]">
+            Some government status pages ask for more than a case number.
+            Anything extra you choose to save for those lookups is stored
+            only in your device&apos;s secure storage (the iOS Keychain or
+            Android Keystore). It is never sent to us, never stored on our
+            servers, and never included in backups or logs we hold. If you
+            reinstall the app or switch phones, you&apos;ll need to enter it
+            again. This applies to:
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-[var(--color-text-muted)]">
+            <li>For visa-status (CEAC) cases: your passport number, the first five letters of your surname, and the consulate location.</li>
+            <li>For immigration court (EOIR) cases: your nationality.</li>
           </ul>
         </section>
 
@@ -68,6 +86,20 @@ export default function PrivacyPage() {
           </ul>
           <p className="mt-1 text-[var(--color-text-muted)]">
             We don&apos;t share your data with anyone else.
+          </p>
+          <p className="mt-2 text-[var(--color-text-muted)]">
+            Visa-status (CEAC) and immigration court (EOIR) checks work
+            differently. Those agencies don&apos;t offer us a way to look up
+            a case on your behalf, so the app opens their official status
+            page inside the app and fills in the details you gave us. The
+            request goes from your phone directly to that government
+            website — the State Department for visa cases, the Executive
+            Office for Immigration Review for court cases — the same as if
+            you had typed it into their page in your own browser. Those
+            sites may set their own cookies and apply their own privacy
+            policies and security checks, which we don&apos;t control. We
+            receive the result back so we can show it to you and save the
+            status to your case history.
           </p>
         </section>
 

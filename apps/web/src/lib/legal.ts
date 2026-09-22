@@ -13,4 +13,4 @@
 export const LEGAL_CONTACT_EMAIL = "contact@REPLACE-BEFORE-LAUNCH.invalid";
 
 /** "Last updated" date shown on both legal pages — bump when the text changes. */
-export const LEGAL_LAST_UPDATED = "September 13, 2026";
+export const LEGAL_LAST_UPDATED = "September 22, 2026";

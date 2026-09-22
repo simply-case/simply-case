@@ -117,6 +117,39 @@ export type Database = {
         }
         Relationships: []
       }
+      news_items: {
+        Row: {
+          external_id: string
+          fetched_at: string
+          id: string
+          published_at: string
+          source: string
+          summary: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          external_id: string
+          fetched_at?: string
+          id?: string
+          published_at: string
+          source: string
+          summary?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          external_id?: string
+          fetched_at?: string
+          id?: string
+          published_at?: string
+          source?: string
+          summary?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           case_status_event_id: string
@@ -182,57 +215,6 @@ export type Database = {
           },
         ]
       }
-      // Hand-written to match migration 0009_poll_runs.sql — this file is
-      // normally `supabase gen types` output, but that requires the
-      // migration to be pushed to the linked project first. Regenerate via
-      // `npm run db:types` after pushing and diff against this by hand.
-      poll_runs: {
-        Row: {
-          changed: number | null
-          claimed: number | null
-          created_at: string
-          crash_message: string | null
-          crashed: boolean
-          error_kinds: Json | null
-          errored: number | null
-          finished_at: string | null
-          id: string
-          provider: Database["public"]["Enums"]["case_provider"]
-          started_at: string
-          updated: number | null
-        }
-        Insert: {
-          changed?: number | null
-          claimed?: number | null
-          created_at?: string
-          crash_message?: string | null
-          crashed?: boolean
-          error_kinds?: Json | null
-          errored?: number | null
-          finished_at?: string | null
-          id?: string
-          provider: Database["public"]["Enums"]["case_provider"]
-          started_at?: string
-          updated?: number | null
-        }
-        Update: {
-          changed?: number | null
-          claimed?: number | null
-          created_at?: string
-          crash_message?: string | null
-          crashed?: boolean
-          error_kinds?: Json | null
-          errored?: number | null
-          finished_at?: string | null
-          id?: string
-          provider?: Database["public"]["Enums"]["case_provider"]
-          started_at?: string
-          updated?: number | null
-        }
-        Relationships: []
-      }
-      // Hand-patched for migration 0012 (not yet applied to production) —
-      // regenerate with `npm run db:types` after `supabase db push`.
       ops_alerts: {
         Row: {
           detail: Json | null
@@ -254,38 +236,48 @@ export type Database = {
         }
         Relationships: []
       }
-      // Hand-patched for migration 0013 (not yet applied to production) —
-      // regenerate with `npm run db:types` after `supabase db push`.
-      news_items: {
+      poll_runs: {
         Row: {
-          external_id: string
-          fetched_at: string
+          changed: number | null
+          claimed: number | null
+          crash_message: string | null
+          crashed: boolean
+          created_at: string
+          error_kinds: Json | null
+          errored: number | null
+          finished_at: string | null
           id: string
-          published_at: string
-          source: string
-          summary: string | null
-          title: string
-          url: string
+          provider: Database["public"]["Enums"]["case_provider"]
+          started_at: string
+          updated: number | null
         }
         Insert: {
-          external_id: string
-          fetched_at?: string
+          changed?: number | null
+          claimed?: number | null
+          crash_message?: string | null
+          crashed?: boolean
+          created_at?: string
+          error_kinds?: Json | null
+          errored?: number | null
+          finished_at?: string | null
           id?: string
-          published_at: string
-          source: string
-          summary?: string | null
-          title: string
-          url: string
+          provider: Database["public"]["Enums"]["case_provider"]
+          started_at?: string
+          updated?: number | null
         }
         Update: {
-          external_id?: string
-          fetched_at?: string
+          changed?: number | null
+          claimed?: number | null
+          crash_message?: string | null
+          crashed?: boolean
+          created_at?: string
+          error_kinds?: Json | null
+          errored?: number | null
+          finished_at?: string | null
           id?: string
-          published_at?: string
-          source?: string
-          summary?: string | null
-          title?: string
-          url?: string
+          provider?: Database["public"]["Enums"]["case_provider"]
+          started_at?: string
+          updated?: number | null
         }
         Relationships: []
       }
@@ -513,16 +505,6 @@ export type Database = {
       }
     }
     Functions: {
-      // Hand-patched for migration 0014 (not yet applied to production) —
-      // regenerate with `npm run db:types` after `supabase db push`.
-      record_ceac_status: {
-        Args: {
-          p_status_detail?: string
-          p_status_text: string
-          p_user_case_id: string
-        }
-        Returns: undefined
-      }
       add_case: {
         Args: {
           p_case_key: string
@@ -547,6 +529,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      check_polling_health: { Args: never; Returns: undefined }
       claim_due_cases: {
         Args: {
           batch_size?: number
@@ -585,6 +568,14 @@ export type Database = {
           p_error_code: string
           p_error_message: string
           p_tracked_case_id: string
+        }
+        Returns: undefined
+      }
+      record_manual_status: {
+        Args: {
+          p_status_detail?: string
+          p_status_text: string
+          p_user_case_id: string
         }
         Returns: undefined
       }

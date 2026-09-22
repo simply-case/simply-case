@@ -25,6 +25,7 @@ export default function CasesLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="[id]" options={{ title: "Case" }} />
       <Stack.Screen name="ceac-refresh/[id]" options={{ title: "Refresh visa status" }} />
+      <Stack.Screen name="eoir-refresh/[id]" options={{ title: "Refresh court status" }} />
       {/* Own X/back controls inside the screen (see add.tsx) rather than a
           native header — a modal sheet reads better without one stacked on
           top of its own close button. */}

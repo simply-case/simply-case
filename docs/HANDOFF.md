@@ -136,12 +136,11 @@ install native packages with `npx expo install`.
   needs two Vault secrets the user hasn't set yet (see §6).
 
 ### Known problems / open items
-1. **NVC/CEAC refresh does not work** (user-tested 2026-09-14): the
-   in-app WebView sits forever on ceac.state.gov's "performing security
-   check" page. A desktop-Chrome user agent and an "open in your regular
-   browser" link were added; the user reports it still fails. **User's
-   decision: fix it with a CAPTCHA-solving service** (this reverses the
-   §5 rejection; see §5 for the open questions). Not started.
+1. **NVC/CEAC refresh: the CEAC page now loads** (fixed 2026-09-16, see
+   §9). What's left is UX, not access: the user still types the case
+   number, passport and surname into the CEAC form by hand every time.
+   The agreed fix is in-app autofill with phone-only storage (§5), built
+   in two steps (§6).
 2. **`EAC9999103403` is circuit-broken** (`consecutive_errors = 10`, from
    the 401s during the key rotation on 09-13), so only `LIN9999106498` is
    being polled, about half the possible sandbox traffic. Resetting it is
@@ -171,10 +170,20 @@ install native packages with `npx expo install`.
    delivers to the owner. `enable_confirmations = false`, so anyone can
    register an email they don't own. Buy a domain before any second person
    gets an account (details in §7).
-7. **Cloudflare probe not run yet.** `.github/workflows/probe-gov-sources.yml`
-   is on `main` but has never run. Start it from GitHub → Actions → "Probe
-   government data sources" → Run workflow. It decides whether the Visa
-   Bulletin and processing times can be built (§5).
+7. **Cloudflare probe: RUN 2026-09-16, and GitHub is blocked too.** Run #1
+   of `probe-gov-sources.yml` returned 403 + a Cloudflare challenge page
+   for `bulletin_index`, `bulletin_sep_2026`, `nvc_timeframes` and
+   `uscis_processing_forms`. Per `docs/PHASE_F_PLAN.md`, that means
+   **skip F2/F3 (Visa Bulletin, processing times) for the beta** — they
+   stay as Resources links. A paid proxy (~$50/mo) is the post-beta
+   option. (`uscis_news` 403 / `federal_register` curl_error in that same
+   run are probe-side quirks, not real outages: `fetch-news` has been
+   populating `news_items` from both sources in production throughout.)
+   **New option worth considering before paying for a proxy:** the CEAC
+   fix on 2026-09-16 proved the *phone's* WebView passes Cloudflare
+   challenges that servers can't. A Visa Bulletin feature could load the
+   page on-device, parse it there, and send only the parsed numbers to
+   Supabase — no proxy, no per-request cost. Untested.
 8. **`packages/shared/src/database.types.ts` is hand-patched** for
    migrations 0009, 0012, 0013 and 0014. Regenerate it with
    `npm run db:types` (changes a tracked file, so use a branch).
@@ -278,38 +287,173 @@ test for every change.
 Scope was widened on 2026-09-12 to match the incumbent app, "Case Tracker
 for USCIS".
 - **Civics quiz: out, by decision.**
-- **CEAC/NVC: decision REVERSED on 2026-09-14.** Originally
-  user-assisted refresh only (user solves the CAPTCHA in a WebView), with
-  a CAPTCHA-solving service rejected for ToS, cost and fragility. The
-  WebView flow turned out not to work at all (stuck on the security
-  check), and the user has decided to use a CAPTCHA-solving service
-  instead. Still to decide before building: which service and its cost
-  per lookup, how often to check (every lookup costs money, so not the
-  USCIS cadence), whether this runs server-side (Edge Function) or on the
-  device, and how to handle State Department terms of use. There's still
-  no CEAC API at any price.
-- **EOIR (immigration court): back IN scope as of 2026-09-14**, queued
-  after the verification work (§6). Findings from a quick check of the
-  official EOIR Automated Case Information System
-  (https://acis.eoir.justice.gov/en/) on 2026-09-14:
-  - No API. Lookup needs an **A-Number (9 digits; pad 8-digit numbers
-    with a leading 0) plus nationality**.
-  - **Protected by hCaptcha**, so it has the same problem as CEAC. The
-    CAPTCHA-service decision above would likely cover both; design them
-    together.
-  - Results show the **next hearing date, time and court location**, the
-    assigned immigration judge, and limited info on decisions, motions and
-    appeals. Primary case only; no bond hearing info. Its own disclaimer
-    says it's "for convenience only" and court documents are the official
-    record.
-  - Not a status string like USCIS, so it needs its own data shape (next
-    hearing as a first-class field), its own case-detail layout, and its
-    own classifier mapping. Wrong hearing info could make someone miss
-    court, so the disclaimer must be prominent.
-  - A-Numbers are sensitive government IDs, so update the Privacy Policy
-    before launch. The schema already allows `provider = 'eoir'` and
-    `aNumberSchema` exists in `packages/shared/src/providers.ts`.
-  - Also available by phone: 1-800-898-7180.
+- **CEAC/NVC: user-assisted refresh, now with in-app autofill** (decided
+  2026-09-16, after the WebView was fixed — see §9). The CAPTCHA-solving
+  service considered on 09-14 is **not needed and not being built**: the
+  user solves the CAPTCHA in the app, so nothing is bypassed and there's
+  no per-lookup cost. Agreed design:
+  - **Sensitive data stays on the phone.** Passport number, surname and
+    consulate location go in iOS secure storage (Keychain, via
+    expo-secure-store), **never** in Supabase, logs or backups. The user's
+    reasoning: if the server never holds it, no server bug can leak it.
+    Still needs a Privacy Policy update and an App Store data disclosure —
+    collecting it is our responsibility wherever it lives.
+  - **Consequence, accepted:** no background polling and no email alerts
+    for CEAC cases, because a human must solve a CAPTCHA every lookup.
+    Mitigation is a weekly "tap to check" reminder push (needs the Apple
+    Developer account).
+  - **Fragility safety net.** CEAC is ASP.NET WebForms; a renamed field
+    must never produce a wrong status. Done: (1) autofill only ever
+    writes into a field, never submits, and skips a field that's already
+    non-empty rather than overwriting it. (2) status is never saved
+    without the user confirming what's on screen (the "We noticed the
+    page mentions: X" → tap to record flow, unchanged since Phase F).
+    (4) and (5) — an ops_alerts-style breakage alert, and an HTML
+    snapshot test fixture — are NOT built yet; revisit once the CAPTCHA
+    flow is confirmed working end to end.
+  - Degrading gracefully means: the "Show the CEAC page" toggle (see §9)
+    reveals the real form so the user can finish it by hand — autofilled
+    fields carry over since it's the same underlying page, just made
+    visible.
+  - **If email alerts for CEAC are ever wanted**, they require automated
+    CAPTCHA solving (~$1.20/1000 via 2Captcha-class services) AND the form
+    data being available without the user. Two routes: server-side (needs
+    passport data on the server — reverses the privacy decision above) or
+    on-device background refresh (keeps data on the phone, but iOS
+    background execution is infrequent and unreliable). Both re-open the
+    terms-of-use question. Not planned; revisit only if users ask.
+  - There's still no CEAC API at any price.
+- **EOIR (immigration court): built 2026-09-17**, mirroring the CEAC
+  pattern above (autofill + visible WebView + real user tap + manual
+  recording), at the user's explicit request to do "the same thing" while
+  the captcha question is worked out separately. What shipped:
+  - `cases/add.tsx` has a fourth tile ("Immigration court"); collects
+    A-Number (the case_key, sent to Supabase like a USCIS receipt number)
+    and an optional nationality (device-only, `lib/eoir-details.ts`, same
+    reasoning as CEAC's passport/surname).
+  - `cases/eoir-refresh/[id].tsx` loads acis.eoir.justice.gov/en/ visibly,
+    autofills the A-Number into its 9-box `react-code-input` control
+    (**confirmed working on device**) and the nationality into its
+    react-select dropdown, then leaves the captcha and the Submit tap to
+    the user, exactly like CEAC.
+  - **ACIS is a React app, unlike CEAC's server-rendered ASP.NET**, so
+    elements often don't exist yet when `onLoadEnd` fires. The autofill
+    script therefore POLLS for each element (250ms × 40 ≈ 10s) instead of
+    looking once, and each step runs concurrently rather than chained —
+    chaining stalled autofill for the full timeout whenever the disclaimer
+    wasn't shown. Copying CEAC's single-shot approach here was a mistake;
+    don't reintroduce it.
+  - **An "I Accept" disclaimer gates the page on every visit; the app
+    clicks it automatically** (user's explicit decision 2026-09-17: people
+    use the app precisely so they don't do these steps by hand). Matched
+    by exact button text — `class="btn"` is shared with other buttons
+    including Submit, so it is NOT safe to target by class. The substance
+    of that disclaimer ("for convenience only", court documents are the
+    official record) is shown in our own UI on the refresh screen instead,
+    so auto-clicking doesn't cost the user the warning itself.
+  - **Nationality matching must be EXACT.** First version matched "option
+    text contains the country name" and picked BRITISH INDIAN OCEAN
+    TERRITORY (`IO`) when the user chose INDIA (`IN`) — it contains
+    "INDIA" and sorts first. Now it matches ACIS's full label
+    (`NAME (CODE)`) by string equality and, if there's no exact match,
+    picks **nothing** and says so. Never add a "close enough" fallback: a
+    silently wrong nationality returns "no information found", which is
+    indistinguishable from "this case doesn't exist".
+  - **ACIS HAS A REAL JSON API — the most important finding of 2026-09-17.**
+    Read out of their own Gatsby bundle
+    (`/component---src-pages-index-*.js`, grep `eoir-ws`):
+    ```
+    GET https://eoir-ws.eoir.justice.gov/api/Case/GetCaseInfo
+          ?alienNumber=<9 digits>&languageCode=EN&natCode=<EOIR code>
+    Header: Captcha-Token: <hCaptcha token>
+    ```
+    Their hCaptcha sitekey is in the same bundle (grep `sitekey:`); it's
+    public by design, embedded client-side.
+    **Confirmed by direct curl, 2026-09-21** (real A-Number, placeholder
+    natCode, no Captcha-Token header):
+    `{"message":"Invalid Captcha Provided."}` (HTTP 400) — also confirmed
+    `natCode` is required server-side (`{"message":"Nationality Code must
+    be provided"}` when omitted). So the captcha IS enforced server-side,
+    not just client-side UI, and there is no way to call this successfully
+    without a real captcha solve — direct calling (route 2 below) is
+    therefore blocked on the same paid-service/ToS decision as CEAC, not
+    simpler. **The shape of a SUCCESSFUL response is still unknown** — that
+    needs a real device to solve the real captcha, which only the user can
+    do.
+    Three consequences, all of which make EOIR *easier* than CEAC:
+    1. Results come back as **structured JSON**, so the "we need real
+       post-submission HTML to scrape" problem can be skipped entirely.
+    2. **No trusted-click problem.** What killed CEAC's automation was
+       needing a genuine finger-tap on a button (script-dispatched clicks
+       are `isTrusted: false` and Cloudflare discards them). Here there is
+       no button — it's an HTTP request with a header. That barrier simply
+       does not exist for EOIR.
+    3. Fully-background lookup is therefore realistic for EOIR in a way it
+       is not for CEAC: get a token, call the API, done.
+    Two routes, in increasing order of commitment:
+    - **Intercept — built 2026-09-21** (`FETCH_INTERCEPT_SCRIPT`,
+      `cases/eoir-refresh/[id].tsx`): keep their page in the WebView, user
+      solves the captcha and submits as normal, but hook `window.fetch` to
+      capture the `GetCaseInfo` JSON response their own page already
+      received (matched on the URL containing `/api/Case/GetCaseInfo`; the
+      original fetch always still runs and its result is returned
+      untouched). Nothing about their site's usage changes and no captcha
+      service is needed.
+      **CONFIRMED WORKING on device, 2026-09-21** — the user's own real
+      case (A-Number `208492302`) returned a full successful payload,
+      captured cleanly by the interceptor. Real shape (see
+      `EoirCaseInfoResponse` in `eoir-refresh/[id].tsx`): `Data` (AlienName,
+      CaseID, OSC_Date, ElapsedDays, LatestHearingDate/Time, decision
+      strings, AppealFiled/ReopenExists/PendingAtBIA flags),
+      `Proceeding` (CaseType, HearingLocationAddress),
+      `Schedule` (AdjDate/AdjTime, IJ_Name, IJ_WebExURLLink,
+      HearingLocationAddress). `formatEoirResult()` turns this into labeled
+      rows (Next hearing, Location, Judge, Hearing link, Case type, Docket
+      date) shown in a card, plus a pre-filled editable summary — still
+      never auto-saved. Deliberately excludes `AlienName` from what gets
+      shown/saved: it's the user's own name, already known to them,
+      putting it in stored status text would be PII with no benefit.
+      Field meanings NOT confirmed by documentation (CaseType "RMV",
+      ClockStatus "R") are shown as raw codes, not translated — same
+      "never guess" principle as CEAC's error relay. Only one real sample
+      exists so far; the interface may not cover every response shape
+      (e.g. a case with an actual decision, or `ValidAlienNumber: false`).
+    - **Call it directly:** mint an hCaptcha token via a solving service
+      and call the API ourselves, no WebView. **Unverified:** whether a
+      token minted off their page passes their server-side check
+      (hCaptcha verification returns the hostname, which they may check).
+      Also crosses hCaptcha's own ToS against automated solving — a
+      decision with a terms dimension, not just a technical one.
+  - **Deliberately NOT built yet:** automatic result/error scraping. CEAC's
+    `ERROR_CHECK_SCRIPT` only exists because the user pasted the real
+    `#ctl00_ContentPlaceHolder1_lblError` element from a live submission —
+    nothing equivalent has been inspected for ACIS. Instead the EOIR
+    screen has the user type what the page says into a free-text box and
+    save it via `record_manual_status`. Once real post-submission HTML
+    (success and "not found" cases) is available, build the same kind of
+    verbatim-element relay CEAC has.
+  - `record_ceac_status` was **renamed to `record_manual_status`** and
+    widened to accept `eoir` as well as `ceac` (migration
+    `0015_eoir_refresh.sql`, not yet applied/pushed — ask before running
+    `supabase db push`). `database.types.ts` was hand-patched again,
+    same as migration 0014 was; regenerate with `npm run db:types` once
+    pushed.
+  - Original 2026-09-14 findings, still accurate: no API; **protected by
+    hCaptcha** (harder/pricier to solve than CEAC's plain BotDetect image
+    text — see the captcha-service pricing note below); results are a
+    **next hearing date/time/court**, assigned judge, and limited
+    decision/motion/appeal info, primary case only, no bond hearing info;
+    its own "for convenience only" disclaimer. A-Numbers are sensitive
+    government IDs — Privacy Policy still needs updating before launch.
+    Also available by phone: 1-800-898-7180.
+  - **Captcha-solving services, if/when automated submission is revisited**
+    (researched 2026-09-17): CEAC's BotDetect captcha is a plain
+    distorted-text image — the cheapest category ("ImageToText"/"normal
+    captcha"), ~$0.40-1.00 per 1,000 solves, <1-15s. EOIR's hCaptcha is a
+    pricier, slower category (~$1.20-2/1,000, a few seconds) since it's an
+    interactive challenge, not just image-to-text. Whatever solving
+    approach gets picked for CEAC should extend to EOIR rather than being
+    designed twice.
 - **Data retention:** keep user data until the user deletes their account.
   Saving a Visa Bulletin priority date is OK.
 - **Visa Bulletin (not built):** daily cron storing the full bulletin plus
@@ -355,15 +499,147 @@ for USCIS".
      government data sources" → Run workflow).
    - Track the USCIS 5-day streak (§3 #4), then email USCIS for
      production access.
-3. **CAPTCHA-service design, for CEAC and EOIR together** (§5): pick a
-   service, estimate cost per lookup, decide check frequency and where it
-   runs, and review terms of use. Talk it through with the user before
-   building anything.
-4. **Fix NVC/DS-160 refresh** using that service.
-5. **Add EOIR cases** (§5 findings): A-Number + nationality input,
-   next-hearing data model and case-detail layout, classifier mapping,
-   an EOIR tile in `cases/add.tsx` and the case-type filter, and a Privacy
-   Policy update.
+3. ~~CEAC autofill + in-app CAPTCHA~~ Built 2026-09-16 (§9) against the
+   real page's element ids.
+   **ROOT CAUSE FOUND 2026-09-22 for the long-standing "page goes blank
+   after I submit the CAPTCHA, no error ever shows" bug** — reported by
+   the user repeatedly across many sessions and never diagnosed until a
+   runtime fetch/XHR diagnostic was run on a real device
+   (`NETWORK_DIAGNOSTIC_SCRIPT`, still in `ceac-refresh/[id].tsx`):
+   - **Submitting CEAC is not a page load.** It's an ASP.NET UpdatePanel
+     **partial postback over XHR** — `POST .../Status.aspx` with
+     `__EVENTTARGET=ctl00$ContentPlaceHolder1$btnSubmit`, responding HTTP
+     200 with ~16KB in MS-AJAX's delimited format
+     (`1|#||4|12085|updatePanel|ctl00_ContentPlaceHolder1_UpdatePanel1|…`).
+     Page confirms `hasPageRequestManager: true`, `hasUpdatePanel: true`.
+     CEAC answers fine; the request was never the problem.
+   - **The bug was ours.** `ERROR_CHECK_SCRIPT` and `EXTRACTION_SCRIPT`
+     were only injected from `onLoadEnd`, and **onLoadEnd never fires for
+     a partial postback** — so the app stopped looking at the page at
+     exactly the moment CEAC put the answer on it. Nothing was blank; we
+     just weren't watching. This is why the wrong-CAPTCHA error never
+     appeared no matter how correct the element targeting was.
+   - **Fix: `PARTIAL_POSTBACK_HOOK_SCRIPT`** registers a handler with
+     ASP.NET AJAX's own `Sys.WebForms.PageRequestManager.add_endRequest`,
+     which fires after every partial postback once the DOM is updated, and
+     re-runs the same two checks. Logs `postback_hook_attached` /
+     `postback_hook_unavailable` so a lost hook is visible instead of
+     silent — the exact failure mode that hid this for weeks.
+     **Not yet re-tested on device as of this write-up.**
+   - **CEAC has NO JSON API**, unlike EOIR — checked properly this time,
+     not assumed. The submit response is HTML inside the MS-AJAX envelope.
+     It IS interceptable via XHR though (proven by the diagnostic), so if
+     DOM reading ever proves unreliable, parsing the intercepted response
+     body is a viable fallback.
+   - Also worth knowing: `ceac.state.gov` returns **403 to any
+     server/CLI request** (Cloudflare), so this could only be
+     investigated from a real device. Its CAPTCHA is served from
+     `remote.captcha.com` (BotDetect).
+   Still open after this: the two safety-net items (§5) —
+   alert-on-breakage, and an HTML snapshot test fixture.
+4. ~~Add EOIR cases~~ Built 2026-09-17. Fully automated end-to-end,
+   **confirmed on device 2026-09-21 including auto-submit — with a real
+   A-Number, no visible captcha challenge appeared at all** (hCaptcha can
+   clear itself with no interaction for low-risk sessions — a real,
+   documented hCaptcha behavior, not something this app is doing).
+   `submit_auto_clicked` was followed by a real `eoir_api_response`, so
+   unlike CEAC, Cloudflare did NOT silently discard this click — at least
+   in this one test. Treat that as "worked once," not "always works":
+   different behavior on the SAME site (interactive challenge some
+   sessions, silent pass others) is exactly what hCaptcha's risk-based
+   design does on purpose, so a future test could still land on "help"
+   (see below) instead of sailing through.
+   - **Migration `0015_eoir_refresh.sql`: PUSHED and confirmed 2026-09-22**
+     (`supabase migration list --linked` shows 0015 on both local and
+     remote; `database.types.ts` regenerated straight from the live schema
+     — `record_manual_status` is real, not hand-patched). Both CEAC and
+     EOIR status-saving work now.
+     Note for next time: plain `supabase` isn't installed, only cached
+     under `npx` — use `npx supabase db push --linked` and
+     `npx supabase gen types typescript --linked > packages/shared/src/database.types.ts`,
+     run from the repo ROOT (a relative `>` redirect from `apps/mobile`
+     silently fails).
+   - **The screen was rewritten 2026-09-21/22 to hide the automation
+     entirely by default** (user's explicit request — "the only manual
+     thing left should be the captcha," then further: automate the
+     Submit tap too, format the result nicely, and never show the raw
+     ACIS page unless truly necessary). Current design
+     (`cases/eoir-refresh/[id].tsx`):
+     - The WebView is ALWAYS mounted but positioned off-screen
+       (`left: -3000`) by default — not conditionally rendered — so it
+       keeps executing JS while invisible. The screen shows a plain
+       "Refreshing information…" (on open) or "Getting your
+       information…" (on manual refresh) spinner instead.
+     - `HELP_TIMEOUT_MS` (25s): if no result has come back by then, the
+       WebView is brought on-screen (`status: "help"`) and the user is
+       told to finish the security check themselves — this is the
+       fallback for whichever step didn't complete on its own (an
+       interactive captcha challenge, or a silently-dropped auto-click).
+       Once a result arrives, even after manual completion, it goes back
+       off-screen for next time.
+     - A successful capture is auto-saved via `record_manual_status` —
+       no manual "Save" tap anymore (the old free-text edit box is gone).
+       This is a deliberate departure from the "never auto-save a guessed
+       status" rule elsewhere: the data is a confirmed structured field
+       from the government's own API, not a scraped/guessed status word,
+       so the same trust level CEAC's `#lblError` relay already gets was
+       extended here too.
+     - Display order matches the user's explicit request: Case
+       information → Name → A-Number → Docket date → a plain-English next
+       hearing sentence ("Your next Master Calendar hearing is in person
+       on January 12, 2027 at 8:30 AM" — `formatEoirHeadline()`) → Judge →
+       Court address → an "Additional details" card for anything else
+       (decisions, appeal/reopen flags, a WebEx link).
+     - `CAL_TYPE_LABELS` (M → "Master Calendar", I → "Individual (Merits)
+       Calendar") is confident, standard immigration-court terminology.
+       `HEARING_MEDIUM_LABELS` (P/V/W/T → in person/video/WebEx/phone) is
+       a reasonable GUESS, not confirmed by documentation — an unrecognized
+       code falls back to showing the raw value rather than inventing a
+       label, same "never guess as fact" principle as everywhere else.
+     - A small top-right "↻ Refresh" button re-runs the whole flow
+       (remounts the WebView via a `key` bump, not `.reload()` — cleaner
+       reset of the fetch-interceptor guard).
+   - **2026-09-22 fixes**, all confirmed against real device feedback:
+     `blur()` after every autofilled field (a `focus()` call on a
+     react-code-input box reached the OS keyboard even off-screen — visible
+     as a keyboard flicker during "Refreshing information…");
+     `formatEoirAddress` drops a redundant repeated-city first segment
+     (ACIS's `HearingLocationAddress` spells the city out in segment 1 AND
+     abbreviates it in segment 3 — was rendering "SEATTLE, WASHINGTON,
+     915 2ND AVENUE..., SEATTLE, WA 98174"); the WebEx hearing link only
+     shows when `HearingMedium !== "P"` (no point showing a virtual-hearing
+     link for an in-person one); removed the "didn't save" message
+     entirely per the user (save failures are silent/logged-only now).
+   - **Status pill wired up 2026-09-22.** EOIR now saves a SHORT canonical
+     `status_text_en` (one of "Hearing scheduled", "Appeal or motion
+     pending", "Decision issued", "No information found" —
+     `formatEoirResult`'s new priority order, most-specific-first) plus the
+     long human sentence in `status_detail_en`, mirroring USCIS's own
+     text/detail split rather than cramming everything into one field and
+     trying to pattern-match a paragraph. `EOIR_STATUS_CLASS` in
+     `packages/shared/src/status.ts` maps those four phrases into the
+     SAME 6 StatusClasses every provider uses (exact match, same pattern
+     as `CEAC_STATUS_CLASS`) — confirmed by the user: hearing scheduled →
+     `pending` (not `actionNeeded`, despite USCIS treating a scheduled
+     interview that way — user's explicit call, EOIR hearings read calmer
+     than "act now"). "Decision issued" deliberately stays `unknown` —
+     no real `CaseDecisionString` has been seen yet, so guessing
+     approved/denied from wording never seen would be exactly the kind of
+     false-positive `classifyStatus`'s own header comment warns against.
+   - **A `↻ Refresh` link added to CEAC/EOIR cards on the case list**
+     (`cases/index.tsx`) — same destination as tapping the card (the
+     refresh screen), just an explicit labeled affordance. A "refresh
+     all" batch feature was discussed but not built: the safe design is a
+     QUEUE (one shared hidden WebView, step through cases one at a time,
+     "Refreshing 2 of 5…"), not several WebViews running in parallel —
+     revisit once single-card refresh has proven solid.
+   - **Not yet done:** a real case-detail layout for EOIR (this screen
+     doubles as both "refresh" and "detail" now; `cases/[id].tsx`'s
+     generic detail view still shows EOIR cases with a plain USCIS-style
+     status pill, not the structured fields — though that pill is now
+     meaningful, see above), a Privacy Policy update for A-Numbers, and
+     the two still-open CEAC safety-net items (§5): alert-on-breakage and
+     an HTML snapshot test fixture.
 6. Decide Visa Bulletin / processing times based on the probe result.
 7. Regenerate DB types; triage Dependabot.
 8. Real legal contact email (web `legal.ts` + mobile `lib/links.ts`) →
@@ -454,6 +730,151 @@ USCIS sandbox test receipts: `EAC9999103403`, `LIN9999106498`,
    the wait. **Unproven.** Mitigated with `withRetry()` plus switching to
    `SERVICE_SECRET_KEY`. Polling has been clean since 2026-09-14 ~10:00
    PT.
+
+**CEAC "Performing security verification" fix, 2026-09-16.** The refresh
+WebView sat forever on Cloudflare's bot check. Two causes, in order:
+1. A desktop **Windows Chrome user agent** had been set on the WebView to
+   look "more like a real browser". That made it worse — iOS WKWebView is
+   Safari's engine, so claiming Windows Chrome while every other signal
+   says iPhone is exactly the contradiction bot detection looks for.
+   Removed; the WebView now reports itself honestly.
+2. The actual bug: Cloudflare's challenge renders in an **iframe whose URL
+   is `about:srcdoc`**. react-native-webview's default `originWhitelist`
+   is `['http://*','https://*']` plus an implicit `about:blank`, so
+   `about:srcdoc` failed the whitelist — the load was cancelled and handed
+   to `Linking`, which logged `Can't open url: about:srcdoc` (visible in
+   Metro) and left the challenge stuck on "Verifying…". Fixed by passing
+   `originWhitelist={["http://*","https://*","about:*"]}`. Both CEAC forms
+   (IV and NIV) then load with their CAPTCHAs. **That Metro warning was
+   the whole diagnosis — check Metro logs before blaming the remote site.**
+
+**CEAC autofill + in-app CAPTCHA, 2026-09-16.** Built in two rounds
+against real inspect-element HTML the user provided from the live page —
+the first round guessed at field locations by visible label text and
+mostly failed; the second uses CEAC's real ids and works. The actual
+elements on `https://ceac.state.gov/CEACStatTracker/Status.aspx`:
+
+| Field | Real id/selector | Notes |
+|---|---|---|
+| Visa type | `#Visa_Application_Type` | `<select>`, value `"IV"` \| `"NIV"`. `onchange` calls `__doPostBack` — changing it ALWAYS reloads the page. |
+| Case number / DS-160 ID | `#Visa_Case_Number` | Same field for both IV and NIV. |
+| Passport | `#Passport_Number` | max 20 chars |
+| Surname | `#Surname` | max 5 chars |
+| Location (NIV only) | `#Location_Dropdown` | `<select>`, ~230 options, value = a 3-letter consulate code (e.g. `"MTL"`), bundled in `lib/ceac-locations.ts` |
+| CAPTCHA image | `img.LBD_CaptchaImage` | BotDetect control |
+| CAPTCHA answer | `#Captcha` | max 10 chars |
+| Submit | `#ctl00_ContentPlaceHolder1_imgFolder` | An `<img alt="submit">`, NOT `input[type=submit]`/`<button>` — a guessed generic search for those failed with `submit_button_not_found`. A synthetic `.click()` on it still bubbles to whatever handler (on it or a wrapping element) actually submits the form. |
+
+What the first (guessed) attempt got wrong, as a lesson: searching "the
+text around this input" to identify passport/surname found the CASE
+NUMBER box instead, because case number, passport and surname all sit
+inside ONE shared container — that container's text mentions every label,
+so every hint matched the first input in it. Anchoring to the real id
+fixes this outright; a future guess-based fallback (if CEAC ever changes
+these ids) should anchor to `<label for="...">`/document-order-after-the-
+label-text, never "nearest input in the same container".
+
+Current flow (`cases/ceac-refresh/[id].tsx`): the CEAC page loads
+invisibly (clipped into a zero-size wrapper, not `display:none`, so it
+keeps rendering/executing JS) with a "Show the CEAC page" toggle as an
+escape hatch. Autofill and CAPTCHA extraction inject on every load.
+CAPTCHA image is pulled out via `canvas.toDataURL()` (safe: same-origin,
+so no tainted-canvas error) and shown as a native `<Image>` + text field;
+submitting fills `#Captcha` and clicks the Submit `<img>` via script. An
+auto-reveal safety net shows the real page automatically 1.5s after a load
+if neither a CAPTCHA nor a recognized status turned up — most likely
+because CEAC returned something the scripts don't know how to read yet.
+
+Also this round: the add-case flow (`cases/add.tsx`) collects optional
+passport/surname (and location, via a searchable picker over
+`lib/ceac-locations.ts`) once at add time — not on a separate card on the
+refresh screen (tried first, removed at the user's request in favor of
+this). **The type picker itself went through two versions:** briefly
+merged into one "Visa case" tile with an in-form Immigrant/Nonimmigrant
+toggle (mirroring CEAC's own question order), then **reverted 2026-09-17**
+back to three separate tiles (USCIS / NVC case / Visa application) at the
+user's request — picking the tile IS the type question again, no toggle.
+The passport/surname/location collection was kept either way.
+
+**Error detection tightened, same day:** rather than guessing at CEAC's
+wording, the app now reads `#ctl00_ContentPlaceHolder1_lblError` directly
+— the ONE element CEAC uses for every error on this page (confirmed from
+two real submissions: "The code entered does not match the code displayed
+on the page." for a wrong CAPTCHA, "Your search did not return any data."
+for a right CAPTCHA but no matching case). Whatever text is in it gets
+shown to the user verbatim, so a third wording neither of us has seen yet
+still surfaces instead of failing silently.
+
+**Submit button problem, found same day, NOT YET CONFIRMED FIXED:**
+clicking the Submit `<img>` (`#ctl00_ContentPlaceHolder1_imgFolder`) via
+script produced no error and no effect — no reload, no postback, nothing.
+Repro was clean: autofill + CAPTCHA image extraction work every time,
+`[ceac captcha] submitted` logs, then nothing further ever happens.
+Likely cause: a script-fired `.click()` isn't always treated as a trusted
+gesture, and whatever handles that image's click (probably a wrapping
+`<a href="javascript:__doPostBack(...)">` — its outer HTML was never
+captured, only the `<img>` inside it) may depend on that trust.
+
+**First fix (calling `__doPostBack("...$imgFolder","")` directly) also
+failed silently** — same symptom, `submitted doPostBack` logged, then
+nothing. Rather than guess a third time, an automatic diagnostic was
+added to `CAPTCHA_EXTRACT_SCRIPT` (runs on every load, no user action
+needed) that reads the real DOM directly: does `__doPostBack` exist, how
+many `<form>`s, and — the key one — the Submit `<img>`'s actual PARENT
+element's tag/onclick/href. Logged as `[ceac diag]` in the terminal.
+
+**Root cause, found from that diagnostic (2026-09-16):** the `<img
+id="...imgFolder">` is purely decorative. The real control is its
+wrapping `<a>`, id `ctl00_ContentPlaceHolder1_btnSubmit`, whose href is:
+```
+javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(
+  "ctl00$ContentPlaceHolder1$btnSubmit", "", true, "", "", false, true))
+```
+Two compounding mistakes in the first fix: (1) the event target name was
+`imgFolder`, not `btnSubmit` — the img's id was never the control's real
+name; (2) this page doesn't use plain `__doPostBack` for Submit at all,
+it uses `WebForm_DoPostBackWithOptions` (which also runs client-side
+validation first, per the `true` flag) — even the right name via bare
+`__doPostBack` would have skipped that.
+
+**Third attempt: ran the EXACT real expression** —
+`WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions("ctl00$ContentPlaceHolder1$btnSubmit",
+"", true, "", "", false, true))`, copied verbatim from the link's href,
+not a guessed equivalent — confirmed by the diagnostic to be 100% correct.
+**Also produced no effect. Same silent nothing as the other two.**
+
+**Conclusion, decided 2026-09-16: stop trying to submit programmatically.**
+Three genuinely different mechanisms (a plain `.click()`, `__doPostBack`
+with a guessed name, and the exact real `WebForm_DoPostBackWithOptions`
+call) all failed identically — no reload, no error, no console exception,
+nothing. That pattern, combined with a real physical tap on this same
+button working every time in earlier testing (back when the page was
+simply shown to the user), points at CEAC/Cloudflare's bot-management
+layer silently discarding script-triggered submissions on this specific
+control. There was no fourth mechanism worth trying — the evidence says
+the category of approach is what's blocked, not the specific call.
+
+**Current design (rebuilt same day):** the CEAC page is shown, visible,
+by default — no more hiding it or trying to fake the tap. Autofill
+(case number, passport, surname, location) and the error-relay
+(`#ctl00_ContentPlaceHolder1_lblError`, verbatim, covers "wrong CAPTCHA"
+and "no matching case" and anything else CEAC ever puts there) still run
+automatically on every load and are what's actually valuable here — the
+user only has to read the CAPTCHA and tap Submit for real; everything
+else is done for them and any result is surfaced as a clean in-app
+message instead of the user having to read the raw page. The native
+CAPTCHA-image card, its own Submit button, and all the submit-script
+machinery were removed — dead code once auto-submit was abandoned.
+
+**Untested as of this rewrite:** whether a real result (a correct CAPTCHA
++ matching case) gets picked up by `EXTRACTION_SCRIPT`'s status-word scan
+and shows the "We noticed the page mentions: X" confirm card. Verified
+so far: autofill, and the error-relay for both known CEAC error messages.
+
+**Nothing from this entire CEAC rebuild is committed yet** — ask the user
+before committing (standing rule) and before touching anything outside
+what's being tested (e.g. sign-in/sign-up — also a standing rule, a prior
+session was corrected for changing it unprompted).
 
 **Phase F build (2026-09-13)** shipped as PR #18: Resources tab, news,
 legal and deletion, CEAC, watchdog, probe workflow. A review before
