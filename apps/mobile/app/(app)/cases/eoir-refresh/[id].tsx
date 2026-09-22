@@ -183,8 +183,17 @@ function buildAutofillScript(fields: AutofillFields): string {
       setter.call(el, digits[i]);
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
+      el.blur();
       any = true;
     }
+    // Belt and suspenders: the WebView is off-screen by default (see the
+    // screen's header comment), but focus() above still reaches the real
+    // OS keyboard even on an invisible native view — confirmed on device,
+    // 2026-09-22, the keyboard flickered up during "Refreshing
+    // information…". Blurring the field, and anything else that might
+    // still be focused, keeps the keyboard from ever appearing while this
+    // runs invisibly.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     post(any ? "anumber_filled" : "anumber_already_filled");
     hideFilledFields();
     return true;
@@ -235,6 +244,9 @@ function buildAutofillScript(fields: AutofillFields): string {
             match.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
             match.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
             match.click();
+            // Same keyboard-flicker fix as fillANumber — the search input
+            // react-select opened stays focused after picking an option.
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
             post("nationality_filled");
             setTimeout(hideFilledFields, 100);
           }),
@@ -446,13 +458,29 @@ function formatEoirDate(dateIso?: string | null, time?: string | null): string |
   return time ? `${dateStr} at ${time}` : dateStr;
 }
 
+/**
+ * ACIS's HearingLocationAddress is pipe-delimited, and courts with 3
+ * segments repeat the city — e.g. "SEATTLE, WASHINGTON|915 2ND AVENUE,
+ * SUITE 613|SEATTLE, WA 98174": segment 1 is a spelled-out city/state
+ * name, segment 3 is the actual mailing line (street city/state/zip
+ * already covers it). Confirmed on device, 2026-09-22 — showed as
+ * "SEATTLE, WASHINGTON, 915 2ND AVENUE, SUITE 613, SEATTLE, WA 98174"
+ * before this fix. Drops segment 1 only when its city matches segment 3's
+ * — courts with a genuinely different first line (not just a repeated
+ * city name) keep all their segments.
+ */
 function formatEoirAddress(raw?: string | null): string | null {
   if (!raw) return null;
-  return raw
+  const parts = raw
     .split("|")
     .map((p) => p.trim())
-    .filter(Boolean)
-    .join(", ");
+    .filter(Boolean);
+  if (parts.length >= 3) {
+    const firstCity = parts[0].split(",")[0]?.trim().toLowerCase();
+    const lastCity = parts[parts.length - 1].split(",")[0]?.trim().toLowerCase();
+    if (firstCity && firstCity === lastCity) parts.shift();
+  }
+  return parts.join(", ");
 }
 
 /**
@@ -482,7 +510,11 @@ function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: E
   if (location) lines.push(`Location: ${location}`);
   if (res.Schedule?.IJ_Name) lines.push(`Judge: ${res.Schedule.IJ_Name}`);
 
-  if (res.Schedule?.IJ_WebExURLLink) {
+  // "P" is confidently "in person" (see HEARING_MEDIUM_LABELS) — no point
+  // showing a WebEx link for a hearing that isn't virtual. Still shown
+  // when the medium is unrecognized/missing, since hiding it would risk
+  // losing a genuinely virtual hearing's link on an uncertain guess.
+  if (res.Schedule?.IJ_WebExURLLink && res.Schedule?.HearingMedium !== "P") {
     rows.push({ label: "Hearing link", value: res.Schedule.IJ_WebExURLLink });
   }
 
@@ -531,7 +563,6 @@ export default function EoirRefreshScreen() {
   const [liveResult, setLiveResult] = useState<EoirCaseInfoResponse | null>(null);
   const [resultRows, setResultRows] = useState<EoirResultRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [saveFailed, setSaveFailed] = useState(false);
   const [webViewKey, setWebViewKey] = useState(0);
   const webViewRef = useRef<WebView>(null);
   const helpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -592,11 +623,11 @@ export default function EoirRefreshScreen() {
       p_user_case_id: info.userCaseId,
       p_status_text: summary,
     });
-    // Best-effort: this is a background sync, not something the user is
-    // waiting on directly — the live result is already on screen regardless
-    // of whether the save succeeded, so a failure here shouldn't block or
-    // re-loop the display. A quiet retry-on-next-refresh is enough.
-    setSaveFailed(Boolean(error));
+    // Best-effort, silent: this is a background sync, not something the
+    // user is waiting on — the live result is already on screen either
+    // way, and a failure here quietly retries on the next refresh. Logged
+    // for debugging, not surfaced in the UI (user's call, 2026-09-22).
+    if (error) console.log("[eoir save]", error.message);
   }
 
   function startRefresh(label: string) {
@@ -605,7 +636,6 @@ export default function EoirRefreshScreen() {
     setLiveResult(null);
     setResultRows([]);
     setErrorMessage(null);
-    setSaveFailed(false);
     // Remounts the WebView with a fresh window (see FETCH_INTERCEPT_SCRIPT's
     // window.__eoirFetchWrapped guard) rather than calling .reload(), which
     // isn't guaranteed to reset that guard the same way across platforms.
@@ -754,12 +784,6 @@ export default function EoirRefreshScreen() {
                   </View>
                 ))}
               </Card>
-            )}
-
-            {saveFailed && (
-              <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-                This didn't save to your account — it'll try again next refresh. What's shown above is still accurate.
-              </Text>
             )}
 
             {/* The app taps EOIR's "I Accept" disclaimer automatically (see
