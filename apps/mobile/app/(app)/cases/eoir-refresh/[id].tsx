@@ -7,31 +7,33 @@ import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/lib/theme";
 import { type EoirDetails, getEoirDetails } from "@/lib/eoir-details";
 import { eoirNationalityLabel, findEoirNationality } from "@/lib/eoir-nationalities";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 
 const EOIR_URL = "https://acis.eoir.justice.gov/en/";
 
 /**
- * Same pattern as cases/ceac-refresh/[id].tsx, deliberately: the real ACIS
- * page stays visible and the USER taps its real Submit button — we never
- * attempt to trigger that ourselves (see the long comment over there for
- * why a script-triggered click on a captcha-gated government form doesn't
- * work). Everything else — filling in the A-Number and nationality, and
- * making it easy to record what the page says afterward — is automated.
+ * UNLIKE cases/ceac-refresh/[id].tsx, this screen does NOT show the real
+ * government page by default. Confirmed 2026-09-21, on device, with a real
+ * A-Number: hCaptcha sometimes clears itself with no visible challenge for
+ * ordinary mobile traffic (a real, known hCaptcha behavior for low-risk
+ * sessions — not something this app does), which means the ENTIRE flow —
+ * autofill, captcha, Submit, reading the result — can run with the ACIS
+ * page never actually shown to the user. So by default the WebView is
+ * mounted but positioned off-screen (see the `webViewBoxStyle` logic
+ * below), and the screen just shows "Refreshing information…" while it
+ * works.
  *
- * Two things this screen does NOT try to do yet, both deliberate for now
- * (2026-09-17), not oversights:
- *   - Solve ACIS's hCaptcha automatically. The user solves it themselves,
- *     same as they type a CEAC captcha themselves right now.
- *   - Read the result/error off the page automatically. CEAC's
- *     ERROR_CHECK_SCRIPT only exists because the user pasted the real
- *     #ctl00_ContentPlaceHolder1_lblError element from a live submission;
- *     nothing equivalent has been inspected for ACIS yet. So this screen
- *     asks the user to read the result themselves and type it in below —
- *     same safety-net principle as CEAC's manual status buttons (never
- *     auto-save a guessed result), just without the automatic detection
- *     on top since there's nothing confirmed to detect yet.
+ * This is NOT guaranteed to always work — hCaptcha can still decide a
+ * session needs a real interactive challenge, and CEAC already taught us
+ * that Cloudflare (which ACIS also sits behind) can silently discard a
+ * script-triggered Submit click even when everything else about the click
+ * looks identical to a real one. So there is a fallback: if no result
+ * arrives within HELP_TIMEOUT_MS, the WebView is brought back on-screen
+ * and the user is asked to finish it themselves — same as CEAC always
+ * does. Once a result comes through (auto or after the user's own tap),
+ * it goes back off-screen for next time.
  */
+const HELP_TIMEOUT_MS = 25000;
 
 /** What the autofill script fills in. The A-Number is always known (it's
  * the case_key); nationality is the optional per-device detail from
@@ -381,7 +383,54 @@ interface EoirCaseInfoResponse {
     IJ_Name?: string | null;
     IJ_WebExURLLink?: string | null;
     HearingLocationAddress?: string | null;
+    /** "M" seen in the one real sample — "Master Calendar" is standard,
+     * well-documented EOIR terminology (vs. "I" for Individual/Merits),
+     * so CAL_TYPE_LABELS translates it. An unrecognized code falls back
+     * to showing the raw value rather than a made-up label. */
+    CalType?: string | null;
+    /** "P" seen in the one real sample. Unlike CalType, EOIR doesn't
+     * publicly document these letters as clearly — HEARING_MEDIUM_LABELS
+     * is a reasonable guess (P/V/W/T for person/video/webex/telephonic,
+     * the mediums EOIR is known to use), not a confirmed mapping. An
+     * unrecognized code shows the raw value. */
+    HearingMedium?: string | null;
   } | null;
+}
+
+/** "Master Calendar" vs "Individual (Merits) Calendar" is standard,
+ * well-established immigration court terminology — confident enough to
+ * translate outright. */
+const CAL_TYPE_LABELS: Record<string, string> = {
+  M: "Master Calendar",
+  I: "Individual (Merits) Calendar",
+};
+
+/** Best-effort guess, NOT confirmed by EOIR documentation — see the
+ * HearingMedium comment on EoirCaseInfoResponse above. */
+const HEARING_MEDIUM_LABELS: Record<string, string> = {
+  P: "in person",
+  V: "by video",
+  W: "by WebEx",
+  T: "by telephone",
+};
+
+/**
+ * "Your next Master Calendar hearing is in person on January 12, 2027 at
+ * 8:30 AM." — the single most important sentence on this screen. Returns
+ * null (never a half-built sentence) if there's no hearing date to anchor
+ * it to.
+ */
+function formatEoirHeadline(res: EoirCaseInfoResponse): string | null {
+  const when = formatEoirDate(
+    res.Schedule?.AdjDate ?? res.Data?.LatestHearingDate,
+    res.Schedule?.AdjTime ?? res.Data?.LatestHearingTime,
+  );
+  if (!when) return null;
+  const calCode = res.Schedule?.CalType;
+  const kind = calCode ? `${CAL_TYPE_LABELS[calCode] ?? calCode} hearing` : "hearing";
+  const mediumCode = res.Schedule?.HearingMedium;
+  const mediumPart = mediumCode ? ` ${HEARING_MEDIUM_LABELS[mediumCode] ?? `(${mediumCode})`}` : "";
+  return `Your next ${kind} is${mediumPart} on ${when}.`;
 }
 
 interface EoirResultRow {
@@ -407,11 +456,16 @@ function formatEoirAddress(raw?: string | null): string | null {
 }
 
 /**
- * Turns the raw API response into a short, readable summary (pre-filled
- * into the editable save box) plus a list of labeled rows shown above it.
- * Deliberately does NOT show the applicant's name — it's the user's own
- * case, they know their own name, and there's no reason to duplicate a
- * piece of PII into the saved status text with no benefit.
+ * Turns the raw API response into a short, readable summary (saved as the
+ * case's status text — see recordStatus) plus a list of "everything else"
+ * rows: decisions, appeal/reopen flags, the hearing link. Name, A-Number,
+ * docket date, the headline hearing sentence, judge and court address are
+ * NOT in `rows` — the screen renders those directly as dedicated fields in
+ * a fixed order per the user's request, not as a generic label/value list.
+ * Deliberately does NOT include the applicant's name in the SAVED summary
+ * — it's the user's own case, they know their own name, and there's no
+ * reason to put a piece of PII into stored status text with no benefit
+ * (it's still shown live on this screen, just not persisted this way).
  */
 function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: EoirResultRow[] } {
   const rows: EoirResultRow[] = [];
@@ -421,22 +475,12 @@ function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: E
     return { summary: "The court's system didn't recognize this A-Number and nationality combination.", rows: [] };
   }
 
-  const hearingWhen = formatEoirDate(res.Schedule?.AdjDate ?? res.Data?.LatestHearingDate, res.Schedule?.AdjTime ?? res.Data?.LatestHearingTime);
-  if (hearingWhen) {
-    rows.push({ label: "Next hearing", value: hearingWhen });
-    lines.push(`Next hearing: ${hearingWhen}`);
-  }
+  const headline = formatEoirHeadline(res);
+  if (headline) lines.push(headline);
 
   const location = formatEoirAddress(res.Schedule?.HearingLocationAddress ?? res.Proceeding?.HearingLocationAddress);
-  if (location) {
-    rows.push({ label: "Location", value: location });
-    lines.push(`Location: ${location}`);
-  }
-
-  if (res.Schedule?.IJ_Name) {
-    rows.push({ label: "Judge", value: res.Schedule.IJ_Name });
-    lines.push(`Judge: ${res.Schedule.IJ_Name}`);
-  }
+  if (location) lines.push(`Location: ${location}`);
+  if (res.Schedule?.IJ_Name) lines.push(`Judge: ${res.Schedule.IJ_Name}`);
 
   if (res.Schedule?.IJ_WebExURLLink) {
     rows.push({ label: "Hearing link", value: res.Schedule.IJ_WebExURLLink });
@@ -459,11 +503,6 @@ function formatEoirResult(res: EoirCaseInfoResponse): { summary: string; rows: E
   if (res.Data?.PendingAtBIA) lines.push("Pending at the Board of Immigration Appeals.");
   if (res.Data?.ReopenExists) lines.push("A motion to reopen exists on this case.");
 
-  if (res.Proceeding?.CaseType) rows.push({ label: "Case type", value: res.Proceeding.CaseType });
-
-  const docketDate = formatEoirDate(res.Data?.DocketDate ?? res.Data?.OSC_Date);
-  if (docketDate) rows.push({ label: "Docket date", value: docketDate });
-
   if (lines.length === 0) {
     lines.push("The court returned a response, but we couldn't find a hearing date or decision in it — check the details below.");
   }
@@ -477,21 +516,25 @@ interface CaseInfo {
   aNumber: string;
 }
 
+type ScreenStatus = "loading" | "ready" | "help" | "error";
+
 export default function EoirRefreshScreen() {
   const { colors, spacing, fontSize, fontFamily } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [info, setInfo] = useState<CaseInfo | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
-  const [autofilled, setAutofilled] = useState(false);
-  const [resultText, setResultText] = useState("");
-  const [resultRows, setResultRows] = useState<EoirResultRow[]>([]);
-  const [apiCaptured, setApiCaptured] = useState(false);
-  const webViewRef = useRef<WebView>(null);
-
   const [eoirDetails, setEoirDetails] = useState<EoirDetails | null>(null);
   const nationality = eoirDetails ? findEoirNationality(eoirDetails.nationalityCode) : null;
+
+  const [status, setStatus] = useState<ScreenStatus>("loading");
+  const [loadingLabel, setLoadingLabel] = useState("Refreshing information…");
+  const [liveResult, setLiveResult] = useState<EoirCaseInfoResponse | null>(null);
+  const [resultRows, setResultRows] = useState<EoirResultRow[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [webViewKey, setWebViewKey] = useState(0);
+  const webViewRef = useRef<WebView>(null);
+  const helpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -518,20 +561,55 @@ export default function EoirRefreshScreen() {
     };
   }, [id]);
 
-  async function recordStatus() {
-    if (!info || !resultText.trim()) return;
-    setSaving(true);
-    setMessage(null);
+  // Starts (or restarts) the fallback clock: if nothing comes back within
+  // HELP_TIMEOUT_MS, bring the real page on-screen so the user can finish
+  // whatever step is stuck (usually an interactive captcha challenge) —
+  // see the header comment for why this is a fallback and not the norm.
+  function armHelpTimer() {
+    if (helpTimerRef.current) clearTimeout(helpTimerRef.current);
+    helpTimerRef.current = setTimeout(() => {
+      setStatus((s) => (s === "loading" ? "help" : s));
+    }, HELP_TIMEOUT_MS);
+  }
+
+  function clearHelpTimer() {
+    if (helpTimerRef.current) {
+      clearTimeout(helpTimerRef.current);
+      helpTimerRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    if (!info) return;
+    armHelpTimer();
+    return clearHelpTimer;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info, webViewKey]);
+
+  async function saveResult(summary: string) {
+    if (!info) return;
     const { error } = await supabase.rpc("record_manual_status", {
       p_user_case_id: info.userCaseId,
-      p_status_text: resultText.trim(),
+      p_status_text: summary,
     });
-    setSaving(false);
-    if (error) {
-      setMessage({ text: "Couldn't save that. Please try again.", isError: true });
-      return;
-    }
-    router.replace(`/cases/${id}`);
+    // Best-effort: this is a background sync, not something the user is
+    // waiting on directly — the live result is already on screen regardless
+    // of whether the save succeeded, so a failure here shouldn't block or
+    // re-loop the display. A quiet retry-on-next-refresh is enough.
+    setSaveFailed(Boolean(error));
+  }
+
+  function startRefresh(label: string) {
+    setLoadingLabel(label);
+    setStatus("loading");
+    setLiveResult(null);
+    setResultRows([]);
+    setErrorMessage(null);
+    setSaveFailed(false);
+    // Remounts the WebView with a fresh window (see FETCH_INTERCEPT_SCRIPT's
+    // window.__eoirFetchWrapped guard) rather than calling .reload(), which
+    // isn't guaranteed to reset that guard the same way across platforms.
+    setWebViewKey((k) => k + 1);
   }
 
   if (loadingInfo) {
@@ -552,60 +630,161 @@ export default function EoirRefreshScreen() {
     );
   }
 
+  // The WebView is ALWAYS mounted (needed so it can run in the background
+  // from the very first load) — only its position changes. Off-screen: a
+  // fixed, non-zero size so it keeps rendering/executing JS normally, just
+  // moved out of the visible area. On-screen (status === "help"): normal
+  // inline layout, bordered, so the user can see and tap it.
+  const webViewBoxStyle =
+    status === "help"
+      ? { height: 420, borderRadius: 12, overflow: "hidden" as const, borderWidth: 1, borderColor: colors.border }
+      : { position: "absolute" as const, left: -3000, top: 0, width: 380, height: 420 };
+
+  const headline = liveResult ? formatEoirHeadline(liveResult) : null;
+  const location = liveResult
+    ? formatEoirAddress(liveResult.Schedule?.HearingLocationAddress ?? liveResult.Proceeding?.HearingLocationAddress)
+    : null;
+  const docketDate = liveResult ? formatEoirDate(liveResult.Data?.DocketDate ?? liveResult.Data?.OSC_Date) : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
-        <Pressable
-          onPress={() => router.push(`/cases/${id}`)}
-          accessibilityRole="button"
-          hitSlop={8}
-          style={{ alignSelf: "flex-start" }}
-        >
-          <Text style={{ fontSize: fontSize.sm, color: colors.link, fontWeight: "600" }}>
-            ← View status & history
-          </Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Pressable onPress={() => router.push(`/cases/${id}`)} accessibilityRole="button" hitSlop={8}>
+            <Text style={{ fontSize: fontSize.sm, color: colors.link, fontWeight: "600" }}>
+              ← View status & history
+            </Text>
+          </Pressable>
+          {status === "ready" || status === "error" ? (
+            <Pressable
+              onPress={() => startRefresh("Getting your information…")}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <Text style={{ fontSize: fontSize.sm, color: colors.link, fontWeight: "600" }}>↻ Refresh</Text>
+            </Pressable>
+          ) : null}
+        </View>
 
         {info.nickname && (
           <Text style={{ fontSize: fontSize.lg, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>{info.nickname}</Text>
         )}
 
-        <Card style={{ gap: spacing.xs }}>
-          <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>A-Number</Text>
-          <Text selectable style={{ fontSize: fontSize.lg, fontFamily: "System", color: colors.accent, letterSpacing: 1 }}>
-            {info.aNumber}
-          </Text>
-          {nationality && (
-            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>{eoirNationalityLabel(nationality)}</Text>
-          )}
-          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-            {autofilled
-              ? "We've filled this into the form below for you. Solve the security check and tap Submit on the page yourself — that last tap has to be a real one."
-              : "We're loading the immigration court's page below — this may take a moment."}
-          </Text>
-          {message && (
-            <Text style={{ fontSize: fontSize.sm, color: message.isError ? colors.danger : colors.accent, marginTop: spacing.xs }}>
-              {message.text}
+        {(status === "loading" || status === "help") && (
+          <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.md }}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={{ fontSize: fontSize.base, color: colors.text, textAlign: "center" }}>
+              {status === "help" ? "We need a bit of help finishing this check below." : loadingLabel}
             </Text>
-          )}
-        </Card>
+            {status === "help" && (
+              <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", paddingHorizontal: spacing.lg }}>
+                Everything's filled in already — just complete the security check and tap Submit on the page below.
+              </Text>
+            )}
+          </View>
+        )}
 
-        {/* The app taps EOIR's "I Accept" disclaimer for the user
-            (deliberate, see buildAutofillScript), so the thing that
-            disclaimer actually SAYS is surfaced here instead — this is the
-            one piece of it that matters, and HANDOFF.md §5 requires it be
-            prominent: acting on a wrong hearing date can make someone miss
-            court. */}
-        <Card style={{ gap: spacing.xs, borderColor: colors.border }}>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-            The immigration court provides this information for convenience only. The documents the court or the
-            Board of Immigration Appeals sends you or your representative are the only official record of your
-            case — always confirm a hearing date against those before relying on it.
-          </Text>
-        </Card>
+        {status === "error" && errorMessage && (
+          <Card style={{ gap: spacing.sm }}>
+            <Text style={{ fontSize: fontSize.sm, color: colors.danger }}>{errorMessage}</Text>
+            <Button label="Try again" variant="secondary" onPress={() => startRefresh("Getting your information…")} />
+          </Card>
+        )}
 
-        <View style={{ height: 420, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: colors.border }}>
+        {status === "ready" && liveResult && (
+          <>
+            <Card style={{ gap: spacing.sm }}>
+              <Text style={{ fontSize: fontSize.lg, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>
+                Case information
+              </Text>
+              {liveResult.Data?.AlienName && (
+                <View>
+                  <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>Name</Text>
+                  <Text style={{ fontSize: fontSize.base, color: colors.text }}>{liveResult.Data.AlienName}</Text>
+                </View>
+              )}
+              <View>
+                <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>A-Number</Text>
+                <Text selectable style={{ fontSize: fontSize.base, fontFamily: "System", color: colors.text, letterSpacing: 1 }}>
+                  {info.aNumber}
+                </Text>
+              </View>
+              {docketDate && (
+                <View>
+                  <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>Docket date</Text>
+                  <Text style={{ fontSize: fontSize.base, color: colors.text }}>{docketDate}</Text>
+                </View>
+              )}
+
+              {headline && (
+                <Text style={{ fontSize: fontSize.base, fontWeight: "600", color: colors.accent, marginTop: spacing.sm }}>
+                  {headline}
+                </Text>
+              )}
+              {liveResult.Schedule?.IJ_Name && (
+                <View>
+                  <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>Judge</Text>
+                  <Text style={{ fontSize: fontSize.base, color: colors.text }}>{liveResult.Schedule.IJ_Name}</Text>
+                </View>
+              )}
+              {location && (
+                <View>
+                  <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>Court address</Text>
+                  <Text style={{ fontSize: fontSize.base, color: colors.text }}>{location}</Text>
+                </View>
+              )}
+            </Card>
+
+            {resultRows.length > 0 && (
+              <Card style={{ gap: spacing.sm }}>
+                <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>Additional details</Text>
+                {resultRows.map((row) => (
+                  <View key={row.label} style={{ flexDirection: "row", gap: spacing.sm }}>
+                    <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, width: 110 }}>{row.label}</Text>
+                    {row.label === "Hearing link" ? (
+                      <Pressable onPress={() => Linking.openURL(row.value)} style={{ flex: 1 }}>
+                        <Text style={{ fontSize: fontSize.sm, color: colors.link, textDecorationLine: "underline" }}>
+                          Join hearing link
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={{ fontSize: fontSize.sm, color: colors.text, flex: 1 }}>{row.value}</Text>
+                    )}
+                  </View>
+                ))}
+              </Card>
+            )}
+
+            {saveFailed && (
+              <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+                This didn't save to your account — it'll try again next refresh. What's shown above is still accurate.
+              </Text>
+            )}
+
+            {/* The app taps EOIR's "I Accept" disclaimer automatically (see
+                buildAutofillScript), so the substance of it is shown here
+                instead — HANDOFF.md §5 requires it be prominent: acting on
+                a wrong hearing date can make someone miss court. */}
+            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
+              This information is for convenience only. Documents the court or the Board of Immigration Appeals
+              sends you or your representative are the only official record — always confirm a hearing date against
+              those before relying on it.
+            </Text>
+          </>
+        )}
+
+        {status === "help" && (
+          <Pressable onPress={() => WebBrowser.openBrowserAsync(EOIR_URL)} accessibilityRole="button" hitSlop={8}>
+            <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", textDecorationLine: "underline" }}>
+              Page stuck on a security check? Open it in your regular browser instead
+            </Text>
+          </Pressable>
+        )}
+
+        <View style={webViewBoxStyle}>
           <WebView
+            key={webViewKey}
             ref={webViewRef}
             source={{ uri: EOIR_URL }}
             // Same reasoning as ceac-refresh: ACIS may render its own
@@ -620,29 +799,30 @@ export default function EoirRefreshScreen() {
               try {
                 const data = JSON.parse(event.nativeEvent.data);
                 if (data.type === "autofill_status") {
-                  if (typeof data.step === "string" && data.step.endsWith("_filled")) setAutofilled(true);
                   console.log("[eoir autofill]", data.step, data.message ?? "");
                 } else if (data.type === "eoir_api_response") {
-                  // The real GetCaseInfo response ACIS's own page received
-                  // after the user's real captcha solve + Submit tap — see
-                  // FETCH_INTERCEPT_SCRIPT. formatEoirResult() only knows
-                  // fields confirmed from one real sample (2026-09-21); it
-                  // never throws on an unexpected shape (every field
-                  // optional), so an unfamiliar response just shows fewer
-                  // rows rather than crashing this screen. The result is
-                  // only ever a starting point in the editable box below —
-                  // never saved automatically.
+                  // The real GetCaseInfo response ACIS's own page received —
+                  // see FETCH_INTERCEPT_SCRIPT. formatEoirResult() only
+                  // knows fields confirmed from real samples; every field
+                  // is optional so an unfamiliar shape just shows fewer
+                  // rows rather than crashing this screen.
                   console.log("[eoir api]", data.status, JSON.stringify(data.body ?? data.parseError));
+                  clearHelpTimer();
                   if (data.ok && data.body) {
                     const { summary, rows } = formatEoirResult(data.body);
-                    setApiCaptured(true);
+                    setLiveResult(data.body);
                     setResultRows(rows);
-                    setResultText(summary);
+                    setStatus("ready");
+                    saveResult(summary);
                   } else if (data.body && typeof data.body.message === "string") {
                     // e.g. {"message":"Invalid Captcha Provided."} — same
                     // relay principle as CEAC's ERROR_CHECK_SCRIPT: show
                     // whatever the government site actually said, verbatim.
-                    setMessage({ text: data.body.message, isError: true });
+                    setErrorMessage(data.body.message);
+                    setStatus("error");
+                  } else {
+                    setErrorMessage("Something went wrong reading the court's response. Please try again.");
+                    setStatus("error");
                   }
                 }
               } catch {
@@ -650,7 +830,6 @@ export default function EoirRefreshScreen() {
               }
             }}
             onLoadEnd={() => {
-              setMessage(null);
               webViewRef.current?.injectJavaScript(FETCH_INTERCEPT_SCRIPT);
               webViewRef.current?.injectJavaScript(
                 buildAutofillScript({
@@ -661,52 +840,6 @@ export default function EoirRefreshScreen() {
             }}
           />
         </View>
-
-        <Pressable onPress={() => WebBrowser.openBrowserAsync(EOIR_URL)} accessibilityRole="button" hitSlop={8}>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, textAlign: "center", textDecorationLine: "underline" }}>
-            Page stuck on a security check? Open it in your regular browser instead
-          </Text>
-        </Pressable>
-
-        {resultRows.length > 0 && (
-          <Card style={{ gap: spacing.sm }}>
-            <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
-              What the court's system says
-            </Text>
-            {resultRows.map((row) => (
-              <View key={row.label} style={{ flexDirection: "row", gap: spacing.sm }}>
-                <Text style={{ fontSize: fontSize.xs, color: colors.textMuted, width: 110 }}>{row.label}</Text>
-                {row.label === "Hearing link" ? (
-                  <Pressable onPress={() => Linking.openURL(row.value)} style={{ flex: 1 }}>
-                    <Text style={{ fontSize: fontSize.sm, color: colors.link, textDecorationLine: "underline" }}>
-                      Join hearing link
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Text style={{ fontSize: fontSize.sm, color: colors.text, flex: 1 }}>{row.value}</Text>
-                )}
-              </View>
-            ))}
-          </Card>
-        )}
-
-        <Card style={{ gap: spacing.sm }}>
-          <Text style={{ fontSize: fontSize.sm, fontWeight: "600", color: colors.text }}>
-            What does the page say?
-          </Text>
-          <Text style={{ fontSize: fontSize.xs, color: colors.textMuted }}>
-            {apiCaptured
-              ? "We put together a summary from the court's own answer above — check it over and edit it if needed before saving."
-              : "Type what you see — a hearing date and location, a decision, or that no information was found — and we'll save it to this case."}
-          </Text>
-          <Input
-            value={resultText}
-            onChangeText={setResultText}
-            placeholder="e.g. Next hearing March 5, 2027 at Immigration Court"
-            multiline
-          />
-          <Button label="Save this" onPress={recordStatus} loading={saving} disabled={!resultText.trim()} />
-        </Card>
       </ScrollView>
     </View>
   );

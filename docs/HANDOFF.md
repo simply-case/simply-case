@@ -504,39 +504,74 @@ for USCIS".
    correct CAPTCHA is submitted — reading the real result page hasn't
    been tested. Once it is, build the two still-open safety-net items
    (§5): alert-on-breakage, and an HTML snapshot test fixture.
-4. ~~Add EOIR cases~~ Built 2026-09-17. `window.fetch` interceptor added
-   2026-09-21 and **confirmed working end-to-end on device** — real
-   A-Number, real captcha solve, real successful `GetCaseInfo` capture,
-   formatted into readable rows (§5 for the full field list). Same day:
-   auto-navigate straight to the refresh screen after adding an EOIR case
-   (`cases/add.tsx`); hides the A-Number/nationality fields once filled so
-   the visible page is mostly just the captcha and Submit; and an
-   auto-submit attempt (`watchForSubmit` in `buildAutofillScript`) that
-   polls for ACIS's Submit button to become enabled (i.e. captcha solved)
-   and clicks it — **UNVERIFIED whether the click itself is honored**;
-   ACIS sits behind Cloudflare same as CEAC, and Cloudflare silently
-   discarded every scripted click CEAC tried. Test this specifically: does
-   `submit_auto_clicked` appear in the log AND get followed by a real
-   `eoir_api_response`? If the click logs but nothing follows, that's the
-   same silent-discard pattern as CEAC — the case-detail summary hearing
-   below is where to confirm this on the next real device test.
-   **Next, in order:**
-   - **Confirm the auto-submit and field-hiding changes on device** —
-     untested as of this write-up (only the interceptor + formatter were
-     confirmed, before these were added).
-   - **Migration `0015_eoir_refresh.sql` is written but BLOCKED, not
-     pushed.** The push itself is denied by an automated policy in this
-     environment (touches the shared database) — needs the user to run
-     `npx supabase db push --linked` directly (the plain `supabase` binary
-     isn't actually installed — only cached under npx — so the `db:push`
-     npm script as originally written doesn't work either; needs `npx`
-     prefixed or the CLI added as a real devDependency). Until pushed,
-     `record_manual_status` doesn't exist server-side and **both CEAC and
-     EOIR status-saving are broken** (the app already calls the new name).
-     Once pushed: `npx supabase gen types typescript --linked > packages/shared/src/database.types.ts`.
-   - Real case-detail layout/classifier for EOIR's structured fields
-     (currently a free-text status built from a template, like CEAC's),
-     and a Privacy Policy update for A-Numbers.
+4. ~~Add EOIR cases~~ Built 2026-09-17. Fully automated end-to-end,
+   **confirmed on device 2026-09-21 including auto-submit — with a real
+   A-Number, no visible captcha challenge appeared at all** (hCaptcha can
+   clear itself with no interaction for low-risk sessions — a real,
+   documented hCaptcha behavior, not something this app is doing).
+   `submit_auto_clicked` was followed by a real `eoir_api_response`, so
+   unlike CEAC, Cloudflare did NOT silently discard this click — at least
+   in this one test. Treat that as "worked once," not "always works":
+   different behavior on the SAME site (interactive challenge some
+   sessions, silent pass others) is exactly what hCaptcha's risk-based
+   design does on purpose, so a future test could still land on "help"
+   (see below) instead of sailing through.
+   - **Migration `0015_eoir_refresh.sql`: PUSHED and confirmed 2026-09-22**
+     (`supabase migration list --linked` shows 0015 on both local and
+     remote; `database.types.ts` regenerated straight from the live schema
+     — `record_manual_status` is real, not hand-patched). Both CEAC and
+     EOIR status-saving work now.
+     Note for next time: plain `supabase` isn't installed, only cached
+     under `npx` — use `npx supabase db push --linked` and
+     `npx supabase gen types typescript --linked > packages/shared/src/database.types.ts`,
+     run from the repo ROOT (a relative `>` redirect from `apps/mobile`
+     silently fails).
+   - **The screen was rewritten 2026-09-21/22 to hide the automation
+     entirely by default** (user's explicit request — "the only manual
+     thing left should be the captcha," then further: automate the
+     Submit tap too, format the result nicely, and never show the raw
+     ACIS page unless truly necessary). Current design
+     (`cases/eoir-refresh/[id].tsx`):
+     - The WebView is ALWAYS mounted but positioned off-screen
+       (`left: -3000`) by default — not conditionally rendered — so it
+       keeps executing JS while invisible. The screen shows a plain
+       "Refreshing information…" (on open) or "Getting your
+       information…" (on manual refresh) spinner instead.
+     - `HELP_TIMEOUT_MS` (25s): if no result has come back by then, the
+       WebView is brought on-screen (`status: "help"`) and the user is
+       told to finish the security check themselves — this is the
+       fallback for whichever step didn't complete on its own (an
+       interactive captcha challenge, or a silently-dropped auto-click).
+       Once a result arrives, even after manual completion, it goes back
+       off-screen for next time.
+     - A successful capture is auto-saved via `record_manual_status` —
+       no manual "Save" tap anymore (the old free-text edit box is gone).
+       This is a deliberate departure from the "never auto-save a guessed
+       status" rule elsewhere: the data is a confirmed structured field
+       from the government's own API, not a scraped/guessed status word,
+       so the same trust level CEAC's `#lblError` relay already gets was
+       extended here too.
+     - Display order matches the user's explicit request: Case
+       information → Name → A-Number → Docket date → a plain-English next
+       hearing sentence ("Your next Master Calendar hearing is in person
+       on January 12, 2027 at 8:30 AM" — `formatEoirHeadline()`) → Judge →
+       Court address → an "Additional details" card for anything else
+       (decisions, appeal/reopen flags, a WebEx link).
+     - `CAL_TYPE_LABELS` (M → "Master Calendar", I → "Individual (Merits)
+       Calendar") is confident, standard immigration-court terminology.
+       `HEARING_MEDIUM_LABELS` (P/V/W/T → in person/video/WebEx/phone) is
+       a reasonable GUESS, not confirmed by documentation — an unrecognized
+       code falls back to showing the raw value rather than inventing a
+       label, same "never guess as fact" principle as everywhere else.
+     - A small top-right "↻ Refresh" button re-runs the whole flow
+       (remounts the WebView via a `key` bump, not `.reload()` — cleaner
+       reset of the fetch-interceptor guard).
+   - **Not yet done:** a real case-detail layout for EOIR (this screen
+     doubles as both "refresh" and "detail" now; `cases/[id].tsx`'s
+     generic detail view still shows EOIR cases with a plain USCIS-style
+     status pill, not the structured fields), a Privacy Policy update for
+     A-Numbers, and the two still-open CEAC safety-net items (§5):
+     alert-on-breakage and an HTML snapshot test fixture.
 6. Decide Visa Bulletin / processing times based on the probe result.
 7. Regenerate DB types; triage Dependabot.
 8. Real legal contact email (web `legal.ts` + mobile `lib/links.ts`) →
