@@ -80,7 +80,7 @@ export default function CaseDetailScreen() {
         {caseDetail.status_detail_en && (
           <Text style={{ fontSize: fontSize.sm, color: colors.textMuted }}>{caseDetail.status_detail_en}</Text>
         )}
-        {caseDetail.provider === "ceac" ? (
+        {caseDetail.provider === "ceac" || caseDetail.provider === "eoir" ? (
           <>
             <Text style={{ fontSize: fontSize.xs, color: colors.textFaint, marginTop: spacing.xs }}>
               {caseDetail.last_checked_at
@@ -89,9 +89,15 @@ export default function CaseDetailScreen() {
               {" · "}updates only when you refresh
             </Text>
             <Button
-              label="Refresh from State Department"
+              label={caseDetail.provider === "ceac" ? "Refresh from State Department" : "Refresh from immigration court"}
               variant="secondary"
-              onPress={() => router.push(`/cases/ceac-refresh/${caseDetail.tracked_case_id}`)}
+              onPress={() =>
+                router.push(
+                  caseDetail.provider === "ceac"
+                    ? `/cases/ceac-refresh/${caseDetail.tracked_case_id}`
+                    : `/cases/eoir-refresh/${caseDetail.tracked_case_id}`,
+                )
+              }
             />
           </>
         ) : (

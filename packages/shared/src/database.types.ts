@@ -513,9 +513,11 @@ export type Database = {
       }
     }
     Functions: {
-      // Hand-patched for migration 0014 (not yet applied to production) —
+      // Hand-patched for migration 0015 (not yet applied to production) —
       // regenerate with `npm run db:types` after `supabase db push`.
-      record_ceac_status: {
+      // record_ceac_status was renamed to record_manual_status and widened
+      // to also accept eoir cases; the old name no longer exists.
+      record_manual_status: {
         Args: {
           p_status_detail?: string
           p_status_text: string

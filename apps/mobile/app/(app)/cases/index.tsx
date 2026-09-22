@@ -25,10 +25,11 @@ const APP_ICON = require("../../../assets/app-icon.png");
 /** What a case "is" for filtering purposes — collapses CEAC's two case
  * shapes (see parseCeacCaseKey) into the two labels the user actually
  * chose between when adding it (see cases/add.tsx's CASE_TYPES). */
-type CaseTypeFilter = "uscis" | "nvc" | "ds160";
+type CaseTypeFilter = "uscis" | "nvc" | "ds160" | "eoir";
 
 function caseTypeOf(c: CaseRow): CaseTypeFilter | null {
   if (c.provider === "uscis") return "uscis";
+  if (c.provider === "eoir") return "eoir";
   if (c.provider === "ceac") {
     const parsed = parseCeacCaseKey(c.case_key ?? "");
     if (parsed?.type === "immigrant") return "nvc";
@@ -41,6 +42,7 @@ const CASE_TYPE_LABELS: Record<CaseTypeFilter, string> = {
   uscis: "USCIS",
   nvc: "NVC case",
   ds160: "Visa application (DS-160)",
+  eoir: "Immigration court",
 };
 
 type SortOption = "recent" | "added" | "az" | "status";
@@ -505,15 +507,18 @@ function CaseCard({
   return (
     <ListRow
       onPress={() =>
-        // CEAC cases go straight into the refresh screen (which auto-loads
-        // the CEAC page) instead of the generic detail screen with a
-        // "Refresh from State Department" button first — one less tap to
+        // CEAC and EOIR cases go straight into their refresh screen (which
+        // auto-loads the real government page) instead of the generic
+        // detail screen with a "Refresh" button first — one less tap to
         // get to the thing the user actually opened the case for.
         // History/status are still one link away from there (see
-        // ceac-refresh/[id].tsx), so nothing is lost.
+        // ceac-refresh/[id].tsx and eoir-refresh/[id].tsx), so nothing is
+        // lost.
         c.provider === "ceac"
           ? router.push(`/cases/ceac-refresh/${c.tracked_case_id}`)
-          : router.push(`/cases/${c.tracked_case_id}`)
+          : c.provider === "eoir"
+            ? router.push(`/cases/eoir-refresh/${c.tracked_case_id}`)
+            : router.push(`/cases/${c.tracked_case_id}`)
       }
       style={isArchived ? { opacity: 0.65 } : undefined}
     >
