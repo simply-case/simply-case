@@ -7,10 +7,23 @@ entries were later corrected) and `docs/PHASE_F_PLAN.md` (a completed build
 spec, now historical). `docs/PLAN.md` still holds the original architecture
 and product decisions.
 
-> **Status at end of 2026-09-14 (evening):** the user's reported app issues
-> (Phase 0) were fixed as a mobile UI pass (see §3 "Mobile UI pass") and
-> tested on the user's phone. **NVC refresh still does not work** (§3 known
-> problems #1). Next up is §6.
+> **Status at end of 2026-09-22.** All three providers now work.
+> **EOIR (immigration court) is new and is the most complete of them** —
+> fully automatic end-to-end on a real device, structured hearing data, no
+> visible captcha in the test that proved it (§5, §6 item 4).
+> **CEAC's long-standing "goes blank after I submit the CAPTCHA" bug was
+> root-caused and fixed** (§6 item 3) — it was never blank; a CEAC submit
+> is an UpdatePanel partial postback, so `onLoadEnd` never fired and we
+> stopped watching the page at the exact moment the answer landed. **That
+> fix is written but NOT yet re-tested on a device** — the user was waiting
+> on a real case number. That's the first thing to confirm.
+>
+> Everything lives on `feature/eoir-integration`, pushed, **PR not opened
+> yet**: https://github.com/simply-case/simply-case/pull/new/feature/eoir-integration
+> Migrations 0015 and 0016 are applied to production. Tests: 86 passing.
+> Also decided this round: Visa Bulletin and processing times both link
+> out rather than being scraped, and the "buy a residential proxy" plan is
+> retired as based on a wrong diagnosis (§5).
 
 ---
 
@@ -54,9 +67,11 @@ and product decisions.
 
 ## 2. What this is
 
-Immigration case tracker ("Simply Case"): users add USCIS receipt numbers
-(and, new, NVC/DS-160 visa cases), and get status history plus email
-notifications on change. Mobile (Expo) is the primary platform; web
+Immigration case tracker ("Simply Case"): users add USCIS receipt numbers,
+NVC/DS-160 visa cases, or EOIR immigration-court A-Numbers, and get status
+history plus email notifications on change. Only USCIS polls in the
+background — CEAC and EOIR are captcha-gated, so they refresh when the
+user opens the case (§5). Mobile (Expo) is the primary platform; web
 (Next.js) is secondary. Both share one Supabase backend.
 
 | Thing | Value |
@@ -70,7 +85,7 @@ notifications on change. Mobile (Expo) is the primary platform; web
 
 Repo layout: `apps/web`, `apps/mobile`, `packages/shared` (Zod validators,
 hand-maintained generated DB types, design tokens, `classifyStatus()`),
-`supabase/migrations` (0001–0014), `supabase/functions`, `docs/`,
+`supabase/migrations` (0001–0016), `supabase/functions`, `docs/`,
 `scripts/`.
 
 **Framework warnings in the repo itself:** `apps/web/AGENTS.md` says this
@@ -116,7 +131,8 @@ install native packages with `npx expo install`.
   always-visible search, separate Sort and Filter pills (bottom sheets),
   and a collapsible "Archived (N)" section. Only Cases has a header icon;
   News/Resources/Profile don't.
-- **Add-case flow** (`cases/add.tsx`, modal): pick USCIS / NVC / DS-160,
+- **Add-case flow** (`cases/add.tsx`, modal): pick USCIS / NVC case /
+  Visa application / Immigration court (four tiles as of 2026-09-17),
   then a per-type screen (number + optional nickname + format help).
   Replaced the old inline form. CEAC cases in the list open straight into
   the refresh screen.
@@ -136,11 +152,15 @@ install native packages with `npx expo install`.
   needs two Vault secrets the user hasn't set yet (see §6).
 
 ### Known problems / open items
-1. **NVC/CEAC refresh: the CEAC page now loads** (fixed 2026-09-16, see
-   §9). What's left is UX, not access: the user still types the case
-   number, passport and surname into the CEAC form by hand every time.
-   The agreed fix is in-app autofill with phone-only storage (§5), built
-   in two steps (§6).
+1. **CEAC refresh: autofill built, blank-screen bug fixed, NOT re-tested.**
+   The page loads (2026-09-16) and the case number, passport, surname and
+   consulate are all filled in automatically from phone-only storage. The
+   "nothing happens after I submit the CAPTCHA" bug was root-caused and
+   fixed 2026-09-22 (§6 item 3) but **has not been confirmed on a device
+   yet** — do that first. What remains manual for CEAC, and probably
+   can't change without a paid captcha service: reading the CAPTCHA,
+   typing it, and tapping Submit. EOIR needs none of that, so the two
+   providers feel very different to use.
 2. **`EAC9999103403` is circuit-broken** (`consecutive_errors = 10`, from
    the 401s during the key rotation on 09-13), so only `LIN9999106498` is
    being polled, about half the possible sandbox traffic. Resetting it is
@@ -296,8 +316,12 @@ for USCIS".
     consulate location go in iOS secure storage (Keychain, via
     expo-secure-store), **never** in Supabase, logs or backups. The user's
     reasoning: if the server never holds it, no server bug can leak it.
-    Still needs a Privacy Policy update and an App Store data disclosure —
-    collecting it is our responsibility wherever it lives.
+    **Privacy Policy updated 2026-09-22** — it now has a "What stays only
+    on your phone" section covering exactly this, plus an explanation that
+    CEAC/EOIR lookups go from the device straight to the government site
+    (we can't look them up on anyone's behalf). **An App Store data
+    disclosure is still outstanding** — collecting this is our
+    responsibility wherever it lives.
   - **Consequence, accepted:** no background polling and no email alerts
     for CEAC cases, because a human must solve a CAPTCHA every lookup.
     Mitigation is a weekly "tap to check" reminder push (needs the Apple
@@ -310,7 +334,7 @@ for USCIS".
     page mentions: X" → tap to record flow, unchanged since Phase F).
     **(4) and (5) BUILT 2026-09-22**, for both CEAC and EOIR:
     - **(4) Breakage alert.** `report_lookup_breakage` (migration
-      **0016 — written, NOT yet pushed**) emails the owner, reusing the
+      **0016 — pushed and applied 2026-09-22**) emails the owner, reusing the
       polling watchdog's machinery exactly: same `ops_alerts` table, same
       Vault-sourced Resend credentials, same fail-closed-when-unconfigured
       behaviour, same once-per-6-hours de-duplication. It's reported by
@@ -480,7 +504,7 @@ for USCIS".
     **next hearing date/time/court**, assigned judge, and limited
     decision/motion/appeal info, primary case only, no bond hearing info;
     its own "for convenience only" disclaimer. A-Numbers are sensitive
-    government IDs — Privacy Policy still needs updating before launch.
+    government IDs — **covered in the Privacy Policy as of 2026-09-22**.
     Also available by phone: 1-800-898-7180.
   - **Captcha-solving services, if/when automated submission is revisited**
     (researched 2026-09-17): CEAC's BotDetect captcha is a plain
@@ -703,13 +727,13 @@ for USCIS".
      QUEUE (one shared hidden WebView, step through cases one at a time,
      "Refreshing 2 of 5…"), not several WebViews running in parallel —
      revisit once single-card refresh has proven solid.
-   - **Not yet done:** a real case-detail layout for EOIR (this screen
-     doubles as both "refresh" and "detail" now; `cases/[id].tsx`'s
+   - **Not yet done:** a real case-detail layout for EOIR — this screen
+     doubles as both "refresh" and "detail" now, and `cases/[id].tsx`'s
      generic detail view still shows EOIR cases with a plain USCIS-style
-     status pill, not the structured fields — though that pill is now
-     meaningful, see above), a Privacy Policy update for A-Numbers, and
-     the two still-open CEAC safety-net items (§5): alert-on-breakage and
-     an HTML snapshot test fixture.
+     status pill rather than the structured hearing fields (the pill
+     itself is meaningful now, see above). Everything else once listed
+     here is done: the Privacy Policy covers A-Numbers (2026-09-22), and
+     both safety nets are built (§5).
 6. ~~Decide Visa Bulletin / processing times based on the probe result~~
    **Decided 2026-09-22 (§5): both link out for now.** Processing times
    has no sanctioned source at all (no USCIS processing-times API exists);
