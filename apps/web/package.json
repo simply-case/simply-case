@@ -12,10 +12,10 @@
   "dependencies": {
     "@mycasepro/shared": "*",
     "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.47.10",
-    "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "@supabase/supabase-js": "^2.117.0",
+    "next": "16.3.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -24,7 +24,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
