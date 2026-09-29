@@ -285,6 +285,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          full_name: string | null
           id: string
           preferred_language: string
           quiet_hours_end: number | null
@@ -295,6 +296,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email: string
+          full_name?: string | null
           id: string
           preferred_language?: string
           quiet_hours_end?: number | null
@@ -305,6 +307,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string
+          full_name?: string | null
           id?: string
           preferred_language?: string
           quiet_hours_end?: number | null
@@ -377,6 +380,42 @@ export type Database = {
           status_text_es?: string | null
           submitted_at?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      uscis_probe_runs: {
+        Row: {
+          created_at: string
+          credential_label: string
+          error_kind: string | null
+          http_status: number | null
+          id: string
+          is_four_xx: boolean
+          message: string | null
+          probe_label: string
+          receipt: string | null
+        }
+        Insert: {
+          created_at?: string
+          credential_label: string
+          error_kind?: string | null
+          http_status?: number | null
+          id?: string
+          is_four_xx?: boolean
+          message?: string | null
+          probe_label: string
+          receipt?: string | null
+        }
+        Update: {
+          created_at?: string
+          credential_label?: string
+          error_kind?: string | null
+          http_status?: number | null
+          id?: string
+          is_four_xx?: boolean
+          message?: string | null
+          probe_label?: string
+          receipt?: string | null
         }
         Relationships: []
       }
@@ -576,6 +615,13 @@ export type Database = {
           p_status_detail?: string
           p_status_text: string
           p_user_case_id: string
+        }
+        Returns: undefined
+      }
+      report_lookup_breakage: {
+        Args: {
+          p_provider: Database["public"]["Enums"]["case_provider"]
+          p_step: string
         }
         Returns: undefined
       }

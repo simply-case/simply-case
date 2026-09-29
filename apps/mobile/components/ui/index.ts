@@ -5,3 +5,5 @@ export * from "./StatusPill";
 export * from "./EmptyState";
 export * from "./Skeleton";
 export * from "./BottomSheet";
+export * from "./GoogleIcon";
+export * from "./Checkbox";

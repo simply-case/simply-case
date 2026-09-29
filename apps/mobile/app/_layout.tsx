@@ -56,13 +56,21 @@ function RootNavigator() {
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
-        <Stack.Screen name="sign-in" options={{ title: "Simply Case" }} />
+        {/* No header: this is a full-screen auth screen with no back
+            destination, and the logo lockup below already carries the
+            wordmark — a title bar repeated "Simply Case" a second time. */}
+        <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ title: "Reset password" }} />
       </Stack.Protected>
 
       {/* Reachable regardless of session state — it's what CREATES the
           session from an incoming recovery deep link. */}
       <Stack.Screen name="auth/confirm" options={{ title: "Opening…" }} />
+
+      {/* Also reachable in both states: linked from the consent checkbox on
+          the signed-out signup screen, and from Profile once signed in.
+          Title is set by the screen itself from the document. */}
+      <Stack.Screen name="legal/[doc]" />
 
       {/* Guarded by session, not by !session: following a recovery link
           signs the user in first, so they arrive here already

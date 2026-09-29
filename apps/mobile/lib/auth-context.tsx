@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { syncProfileTimezone } from "./timezone";
 
 interface AuthState {
   session: Session | null;
@@ -32,10 +33,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setIsLoading(false);
+      if (data.session) void syncProfileTimezone(data.session.user.id);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      // Covers a fresh signup/sign-in, and re-checks on every app open via
+      // the getSession() call above. Fire-and-forget on purpose — see
+      // syncProfileTimezone: it must never delay or block auth state.
+      if (newSession) void syncProfileTimezone(newSession.user.id);
     });
 
     return () => subscription.subscription.unsubscribe();
