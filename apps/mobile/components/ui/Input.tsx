@@ -46,6 +46,15 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
               fontSize: fontSize.base,
               color: colors.text,
               backgroundColor: colors.surface,
+              // A visibly-but-gently lifted field. Deliberately NOT the
+              // shared cardShadow token (theme.ts): that's 4% opacity,
+              // meant to be "a subtle hint" on a Card sitting on the page —
+              // on a white input against a cream background it's close to
+              // invisible. This is its own, slightly stronger value.
+              shadowColor: "#111827",
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              shadowOffset: { width: 0, height: 2 },
             },
             style,
           ]}

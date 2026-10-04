@@ -287,6 +287,9 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          // HAND-PATCHED — migration 0019_legal_reconsent.sql not yet
+          // pushed. Regenerate with `npm run db:types` once it is.
+          legal_accepted_at: string | null
           preferred_language: string
           quiet_hours_end: number | null
           quiet_hours_start: number | null
@@ -298,6 +301,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          legal_accepted_at?: string | null
           preferred_language?: string
           quiet_hours_end?: number | null
           quiet_hours_start?: number | null
@@ -309,6 +313,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          legal_accepted_at?: string | null
           preferred_language?: string
           quiet_hours_end?: number | null
           quiet_hours_start?: number | null

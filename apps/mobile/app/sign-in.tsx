@@ -3,6 +3,7 @@ import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, Vie
 import { Link } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
 import { Button, Checkbox, GoogleIcon, Input } from "@/components/ui";
 import { LegalSheet } from "@/components/LegalSheet";
@@ -64,17 +65,20 @@ export default function SignInScreen() {
  * up and Stack.Protected in the root layout swaps screens on its own — no
  * manual navigation needed here.
  *
- * Defaults to "signup": this is a new user's very first screen, and
- * "create an account" is a more honest first ask than "sign in" for
- * someone who doesn't have one yet.
+ * Defaults to "signin" for a device that's authenticated here before, and
+ * "signup" for one that hasn't (lib/auth-history.ts — a flag that, unlike
+ * the session itself, survives sign-out, so a returning-but-signed-out
+ * user isn't asked to "create an account" they already have). Either way
+ * the other mode is one tap away via the link at the bottom.
  *
  * Apple/Google sign-in are planned but NOT implemented — deliberately not
  * stubbing disabled buttons for them here, since a dead button reads as
  * broken rather than "coming soon". Tracked in docs/ROADMAP.md.
  */
 function PasswordForm() {
-  const { colors, spacing, fontSize, fontFamily, radii } = useTheme();
-  const [mode, setMode] = useState<"signin" | "signup">("signup");
+  const { colors, spacing, fontSize, radii } = useTheme();
+  const { hasSignedInBefore } = useAuth();
+  const [mode, setMode] = useState<"signin" | "signup">(hasSignedInBefore ? "signin" : "signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -131,10 +135,16 @@ function PasswordForm() {
 
   return (
     <View style={{ gap: spacing.md }}>
-      <Text style={{ fontSize: fontSize.xxl, fontFamily: fontFamily.serif, fontWeight: "700", color: colors.text }}>
+      {/* No fontFamily override here on purpose — this falls back to the
+          system sans font (San Francisco on iOS), not the app's serif
+          headline token (Georgia) used elsewhere. Reads closer to the
+          logo's own simple, modern letterforms than a serif headline did;
+          scoped to just this screen since the serif token is a deliberate
+          choice on ~10 other screens that weren't part of this ask. */}
+      <Text style={{ fontSize: fontSize.xl, fontWeight: "700", color: colors.text, textAlign: "center" }}>
         {mode === "signin" ? "Welcome back" : "Create your account"}
       </Text>
-      <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: -spacing.xs, marginBottom: spacing.sm }}>
+      <Text style={{ fontSize: fontSize.base, color: colors.textMuted, marginTop: -spacing.xs, marginBottom: spacing.sm, textAlign: "center" }}>
         {mode === "signin"
           ? "Sign in to your account to continue with Simply Case."
           : "Track your immigration case status, in one place."}

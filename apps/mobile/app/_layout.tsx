@@ -29,7 +29,7 @@ export default function RootLayout() {
  */
 function RootNavigator() {
   const { colors } = useTheme();
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, needsLegalReconsent } = useAuth();
 
   if (isLoading) {
     return (
@@ -51,8 +51,15 @@ function RootNavigator() {
 
   return (
     <Stack screenOptions={screenOptions}>
-      <Stack.Protected guard={!!session}>
+      <Stack.Protected guard={!!session && !needsLegalReconsent}>
         <Stack.Screen name="(app)" options={{ headerShown: false }} />
+      </Stack.Protected>
+
+      {/* Blocks the real app behind an active "I agree" — see
+          lib/auth-context.tsx and app/legal-update.tsx. No back
+          destination on purpose: it's a gate, not a dismissible screen. */}
+      <Stack.Protected guard={!!session && needsLegalReconsent}>
+        <Stack.Screen name="legal-update" options={{ headerShown: false }} />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
