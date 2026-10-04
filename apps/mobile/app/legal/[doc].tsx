@@ -56,8 +56,8 @@ export default function LegalScreen() {
           {/* Footer, not header — matches the sheet presentation. */}
           <Text
             style={{
-              fontSize: fontSize.sm,
-              color: colors.textFaint,
+              fontSize: fontSize.base,
+              color: colors.textMuted,
               marginTop: spacing.xl,
               paddingTop: spacing.lg,
               borderTopWidth: 1,

@@ -101,8 +101,8 @@ export function LegalSheet({
                   putting it first pushed the actual terms down the page. */}
               <Text
                 style={{
-                  fontSize: fontSize.sm,
-                  color: colors.textFaint,
+                  fontSize: fontSize.base,
+                  color: colors.textMuted,
                   marginTop: spacing.xl,
                   paddingTop: spacing.lg,
                   borderTopWidth: 1,

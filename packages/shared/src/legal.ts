@@ -57,7 +57,23 @@ export interface LegalDocument {
 export const LEGAL_CONTACT_EMAIL = "contact@REPLACE-BEFORE-LAUNCH.invalid";
 
 /** Shown on both documents — bump whenever the text below changes. */
-export const LEGAL_LAST_UPDATED = "September 22, 2026";
+export const LEGAL_LAST_UPDATED = "October 2, 2026";
+
+/**
+ * One-line, plain-language summaries of what changed, newest first. Shown
+ * on the re-consent screen (app/legal-update.tsx) so a returning user sees
+ * what's different rather than the whole document again. Hand-written on
+ * purpose — diffing the structured content below into "plain language"
+ * automatically isn't something worth building; a human already knows what
+ * changed and can say it in one sentence.
+ */
+export const LEGAL_CHANGELOG: Array<{ date: string; summary: string }> = [
+  {
+    date: LEGAL_LAST_UPDATED,
+    summary:
+      "We added new sections on data breaches, business transfers, and California privacy rights. We also clarified how long we keep your data and how email deletion requests are handled. Finally, we changed how we'll handle future policy updates — see \"Changes\" in the Terms.",
+  },
+];
 
 const p = (...content: LegalInline[]): LegalBlock => ({ kind: "paragraph", content });
 const ul = (...items: string[]): LegalBlock => ({ kind: "list", items });
@@ -110,7 +126,10 @@ function termsSections(contactEmail: string): LegalSection[] {
       heading: "Changes",
       blocks: [
         p(
-          "We may update these terms from time to time. Continued use of the app after a change means you accept the updated terms.",
+          "We may update these terms. If a change affects your rights or how your data is used, we'll ask you to actively agree to the updated terms the next time you open the app — simply continuing to use the app is not enough.",
+        ),
+        p(
+          "When that happens, we'll show you a short, plain-language summary of what changed, with a link to the full updated terms and privacy policy.",
         ),
       ],
     },
@@ -139,6 +158,9 @@ function privacySections(contactEmail: string): LegalSection[] {
           "If you use visa-status (CEAC) tracking: the case or application identifier you enter.",
           "If you track an immigration court (EOIR) case: the A-Number you enter. An A-Number is a government identification number, and we treat it with the same care as any other case identifier you give us.",
         ),
+        p(
+          "We do not collect your location, financial information, medical information, or access your device's contacts.",
+        ),
       ],
     },
     {
@@ -157,7 +179,7 @@ function privacySections(contactEmail: string): LegalSection[] {
       heading: "What we don't do",
       blocks: [
         p(
-          "We don't sell your data or use it for advertising. We don't use any analytics or crash-reporting service — there is none built into the app as of this writing.",
+          "We don't sell your data or use it for advertising. We don't use any analytics or crash-reporting service — there is none built into the app as of this writing. We also don't share de-identified, anonymized, or pseudonymized versions of your data with anyone.",
         ),
       ],
     },
@@ -172,7 +194,22 @@ function privacySections(contactEmail: string): LegalSection[] {
         ),
         p("We don't share your data with anyone else."),
         p(
-          "Visa-status (CEAC) and immigration court (EOIR) checks work differently. Those agencies don't offer us a way to look up a case on your behalf, so the app opens their official status page inside the app and fills in the details you gave us. The request goes from your phone directly to that government website — the State Department for visa cases, the Executive Office for Immigration Review for court cases — the same as if you had typed it into their page in your own browser. Those sites may set their own cookies and apply their own privacy policies and security checks, which we don't control. We receive the result back so we can show it to you and save the status to your case history.",
+          "The companies listed above may only use your data to provide their service to us. For example, Resend can only use your email address to send the messages we ask it to send. None of them may use your data for their own purposes, or share it with anyone else, without your active consent. Each of them is bound to handle your data consistent with this policy.",
+        ),
+        p(
+          "Visa-status (CEAC) and immigration court (EOIR) checks work differently. Those agencies don't offer us a way to look up a case on your behalf, so the app opens their official status page and fills in the details you gave us.",
+        ),
+        p(
+          "The request goes from your phone directly to that government website — the State Department for visa cases, the Executive Office for Immigration Review for court cases. It's the same as if you had typed it into their page yourself.",
+        ),
+        p(
+          "Those sites may set their own cookies. They have their own privacy policies and security checks, which we don't control.",
+        ),
+        p(
+          "We receive the result back so we can show it to you and save the status to your case history.",
+        ),
+        p(
+          "If another Simply Case user is also tracking the same case or receipt number, you both see the same publicly-sourced status history for that case — that status information isn't private to either of you. Your own account details, like your name, your nickname for the case, and your notification settings, are never shared with other users.",
         ),
       ],
     },
@@ -180,7 +217,10 @@ function privacySections(contactEmail: string): LegalSection[] {
       heading: "How long we keep it",
       blocks: [
         p(
-          "We keep your data for as long as your account exists. If you delete your account, your profile, tracked cases, notification history, and any case data that no one else is tracking are deleted immediately. A case that other users are also tracking stays in our system for their sake, but is no longer linked to you in any way.",
+          "We keep your data for as long as your account exists. We don't automatically delete inactive accounts — if you stop using the app, your data stays exactly as described above until you delete your account yourself.",
+        ),
+        p(
+          "If you delete your account, your profile, tracked cases, notification history, and any case data that no one else is tracking are deleted immediately. A case that other users are also tracking stays in our system for their sake, but is no longer linked to you in any way.",
         ),
       ],
     },
@@ -188,7 +228,38 @@ function privacySections(contactEmail: string): LegalSection[] {
       heading: "Deleting your account",
       blocks: [
         p(
-          `You can delete your account at any time from Profile → Delete account in the app. You can also email us at ${contactEmail} and we'll delete it for you.`,
+          "Deleting your account from Profile → Delete account in the app happens immediately.",
+        ),
+        p(
+          `If you'd rather email us at ${contactEmail}, we'll delete your account and data within 30 days of your request.`,
+        ),
+      ],
+    },
+    {
+      heading: "If there's a data breach",
+      blocks: [
+        p(
+          "If we discover that your data was accessed without authorization, we'll notify you without unreasonable delay by email. We'll tell you what happened and what steps you can take, if any — for example, changing your password.",
+        ),
+      ],
+    },
+    {
+      heading: "California privacy rights",
+      blocks: [
+        p(
+          "California residents may have extra rights under the California Consumer Privacy Act (CCPA). These include the right to know what personal information we have about you, and the right to ask us to delete it.",
+        ),
+        p(
+          "You can use the account deletion options above for either of these, or email us.",
+        ),
+        p("We don't sell personal information, so there's no sale to opt out of."),
+      ],
+    },
+    {
+      heading: "If Simply Case changes ownership",
+      blocks: [
+        p(
+          "If Simply Case is ever sold, merged, or otherwise transferred to a new owner, we'll notify you before your data is transferred as part of that change.",
         ),
       ],
     },
