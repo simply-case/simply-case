@@ -57,7 +57,7 @@ export interface LegalDocument {
 export const LEGAL_CONTACT_EMAIL = "contact@REPLACE-BEFORE-LAUNCH.invalid";
 
 /** Shown on both documents — bump whenever the text below changes. */
-export const LEGAL_LAST_UPDATED = "October 2, 2026";
+export const LEGAL_LAST_UPDATED = "October 6, 2026";
 
 /**
  * One-line, plain-language summaries of what changed, newest first. Shown
@@ -66,10 +66,20 @@ export const LEGAL_LAST_UPDATED = "October 2, 2026";
  * purpose — diffing the structured content below into "plain language"
  * automatically isn't something worth building; a human already knows what
  * changed and can say it in one sentence.
+ *
+ * Each entry's `date` is a literal string, NOT a reference to
+ * LEGAL_LAST_UPDATED — that constant only ever holds the CURRENT date, so a
+ * reference would silently rewrite every past entry's date each time it's
+ * bumped.
  */
 export const LEGAL_CHANGELOG: Array<{ date: string; summary: string }> = [
   {
-    date: LEGAL_LAST_UPDATED,
+    date: "October 6, 2026",
+    summary:
+      "Strengthened the \"If Simply Case changes ownership\" section: a new owner must now follow this same Privacy Policy, and you can delete your account first if you'd rather not have your data transferred.",
+  },
+  {
+    date: "October 2, 2026",
     summary:
       "We added new sections on data breaches, business transfers, and California privacy rights. We also clarified how long we keep your data and how email deletion requests are handled. Finally, we changed how we'll handle future policy updates — see \"Changes\" in the Terms.",
   },
@@ -259,7 +269,10 @@ function privacySections(contactEmail: string): LegalSection[] {
       heading: "If Simply Case changes ownership",
       blocks: [
         p(
-          "If Simply Case is ever sold, merged, or otherwise transferred to a new owner, we'll notify you before your data is transferred as part of that change.",
+          "If Simply Case is ever sold, merged, or otherwise transferred to a new owner, we'll notify you before your data is transferred. The new owner will be required to follow this same Privacy Policy.",
+        ),
+        p(
+          "If you'd rather not have your data transferred, you can delete your account before the transfer happens — see \"Deleting your account\" above.",
         ),
       ],
     },

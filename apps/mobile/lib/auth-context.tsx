@@ -71,16 +71,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setIsLoading(false);
     })();
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+
+      // INITIAL_SESSION fires once automatically as part of the client's
+      // own startup, for the SAME session the bootstrap above already
+      // awaits in full. Re-running these checks here too — unawaited, with
+      // no ordering guarantee against the bootstrap's own awaited call —
+      // was a real race: whichever of the two identical checks finished
+      // last silently overwrote the other's result in needsLegalReconsent.
+      // Found 2026-10-06: the reconsent screen silently failed to appear
+      // on a real device, exactly what that race predicts if the
+      // unawaited call lost the race and fell back to its fail-open
+      // default. Only react here to events that happen AFTER the
+      // bootstrap has already finished — a fresh sign-in/sign-up, a token
+      // refresh, etc.
+      if (event === "INITIAL_SESSION") return;
+
       if (newSession) {
-        // Covers a fresh signup/sign-in, and re-checks on every app open via
-        // the getSession() call above. Fire-and-forget on purpose — see
-        // syncProfileTimezone: it must never delay or block auth state. A
-        // brief flash of the main app before this resolves is an accepted
-        // tradeoff here (unlike the initial bootstrap above, which DOES
-        // wait) — redesigning every auth event around this check isn't
-        // worth it for what's a compliance nicety, not a security boundary.
+        // Fire-and-forget on purpose — see syncProfileTimezone: it must
+        // never delay or block auth state. A brief flash of the main app
+        // before this resolves is an accepted tradeoff for a REAL
+        // subsequent event (unlike the initial bootstrap, which does
+        // wait) — this is a compliance nicety, not a security boundary.
         void syncProfileTimezone(newSession.user.id);
         void markEverAuthenticated();
         setHasSignedInBefore(true);
