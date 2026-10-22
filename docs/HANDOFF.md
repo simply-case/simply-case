@@ -1,16 +1,37 @@
 # Simply Case — handoff
 
 **Paste or attach this file at the start of a new chat.** Rewritten
-2026-09-14 as the single, current source of truth. It supersedes older
+2026-09-14, refreshed 2026-10-14 (see the status block below) as the
+single, current source of truth. It supersedes older
 statements in `docs/ROADMAP.md` (a chronological log — some of its earlier
 entries were later corrected) and `docs/PHASE_F_PLAN.md` (a completed build
 spec, now historical). `docs/PLAN.md` still holds the original architecture
 and product decisions.
 
-> **Status at end of 2026-09-14 (evening):** the user's reported app issues
-> (Phase 0) were fixed as a mobile UI pass (see §3 "Mobile UI pass") and
-> tested on the user's phone. **NVC refresh still does not work** (§3 known
-> problems #1). Next up is §6.
+> **Status as of 2026-10-14 (refresh).** Everything below that is dated
+> 2026-09-14 is older than this block; where they disagree, this block wins.
+> Since the 09-22 handoff the work was: EOIR shipped (PR #20), a USCIS
+> 4xx-traffic probe shipped (PR #21), and the current branch
+> `feature/sign-in-polish` (pushed, NOT yet merged to `main`) added the
+> legal-docs overhaul and re-consent flow. Details in §3a. **Live-system
+> facts (poll health, probe streak, error counts) were NOT re-verified in
+> this refresh** — the Supabase CLI isn't cached for `npx --no-install`,
+> so re-run the §8 checks before trusting any "current" number here.
+> Companion doc for the marketing site: `docs/WEBSITE_HANDOFF.md`.
+>
+> **Update, later 2026-10-14:** USCIS production access is pending (the
+> user says the API is "almost" granted; unverified). The company is
+> **Jakara LLC** (jakarallc.com); `legal.ts` now names it as operator and
+> its date is **October 14, 2026**, which will trigger the re-consent
+> screen on the owner's account on next open. Added sections: data-sharing
+> choices/risks, impact on other people, business shutdown. The website
+> (`jakarallc.com`, `/simplycase`, `/privacy`, `/terms`, `/delete-account`)
+> is being built in a separate repo from `docs/WEBSITE_HANDOFF.md`, whose
+> Appendix A is a generated copy of the policy: regenerate it whenever
+> `legal.ts` changes. The user still must pick the contact mailbox and
+> replace `LEGAL_CONTACT_EMAIL`. **Uncommitted at this moment:** the
+> `legal.ts` edit, this file, and `docs/WEBSITE_HANDOFF.md`, all on
+> `feature/sign-in-polish`.
 
 ---
 
@@ -64,13 +85,13 @@ notifications on change. Mobile (Expo) is the primary platform; web
 | GitHub | github.com/simply-case/simply-case (public) |
 | Live web | https://simply-case-web.vercel.app (Vercel project `simply-case-web`, root `apps/web`, auto-deploys on push to `main`) |
 | Supabase | project ref `ltpvagdbprwzqtasurez`, us-east-1 |
-| Local path | `/Users/manimann/Documents/personal projects/mycasepro`. **The space in "personal projects" is still there.** Some older docs claim it was renamed to `personal-projects`; it was not. |
+| Local path | `/Users/manimann/Documents/Development/Personal/mycasepro` (moved since 09-14; the old path with a space in it is gone, so local native builds are no longer blocked by it). |
 | Stack | Next.js 16 (App Router) · Expo SDK 57 + expo-router · Supabase (Postgres, Auth, Edge Functions/Deno, pg_cron, pg_net, Vault) · Resend · npm workspaces |
 | Accounts | Exactly one user account exists: the owner's. |
 
 Repo layout: `apps/web`, `apps/mobile`, `packages/shared` (Zod validators,
-hand-maintained generated DB types, design tokens, `classifyStatus()`),
-`supabase/migrations` (0001–0014), `supabase/functions`, `docs/`,
+generated DB types (regenerated from the live schema 2026-10-03), design tokens, `classifyStatus()`),
+`supabase/migrations` (0001–0019), `supabase/functions`, `docs/`,
 `scripts/`.
 
 **Framework warnings in the repo itself:** `apps/web/AGENTS.md` says this
@@ -151,7 +172,13 @@ install native packages with `npx expo install`.
    sandbox traffic for USCIS production access. **Revert after production
    access is granted:**
    `update tracked_cases set check_interval_seconds = 21600 where provider = 'uscis';`
-4. **USCIS production access:** USCIS requires 5 consecutive days of
+4. **USCIS production access — now gated on 4xx traffic, not just
+   volume.** The original 5-day streak was accepted, then USCIS asked for
+   5 more days showing 4xx responses (see §3a, `uscis_probe_runs`). After
+   that streak, USCIS also expects the Terms/Privacy to satisfy their
+   checklist (done in text, §3a) **before the demo and production
+   access**. Original notes on the first streak:
+   USCIS requires 5 consecutive days of
    sandbox traffic, then an email to developersupport@uscis.dhs.gov. Count
    days from `poll_runs` rows with `updated > 0`. **The sandbox only runs
    M-F 7:00 AM - 8:00 PM ET (4 AM - 5 PM PT)**; outside that it returns
@@ -164,8 +191,12 @@ install native packages with `npx expo install`.
    Analytics page is in **ET** and defaults to "Average response time",
    not request count, which makes days look missing when they aren't.
 5. **Legal contact email is a placeholder**
-   (`apps/web/src/lib/legal.ts` → `LEGAL_CONTACT_EMAIL`). The user will
-   create a real address. **Blocker before any beta tester signs up.**
+   (`packages/shared/src/legal.ts` → `LEGAL_CONTACT_EMAIL`, one line;
+   mobile `links.ts` reads it). The user now owns **jakarallc.com**, which
+   is the natural home for a real address (e.g. a support@ mailbox) and
+   for the Resend sender domain (Phase E). **Blocker before any beta
+   tester signs up**, and the address is also where deletion-by-email
+   requests land, which USCIS's checklist makes load-bearing.
 6. **No verified email domain (Phase E).** Resend's test sender only
    delivers to the owner. `enable_confirmations = false`, so anyone can
    register an email they don't own. Buy a domain before any second person
@@ -184,9 +215,8 @@ install native packages with `npx expo install`.
    challenges that servers can't. A Visa Bulletin feature could load the
    page on-device, parse it there, and send only the parsed numbers to
    Supabase — no proxy, no per-request cost. Untested.
-8. **`packages/shared/src/database.types.ts` is hand-patched** for
-   migrations 0009, 0012, 0013 and 0014. Regenerate it with
-   `npm run db:types` (changes a tracked file, so use a branch).
+8. ~~`database.types.ts` hand-patched~~ Regenerated from the live schema
+   2026-10-03 (commit 24020ce). Re-run after any new migration.
 9. **Sandbox case `EAC9999103400` was deleted** by a verification test on
    2026-09-13. It's a fixed USCIS test receipt, so it can be re-added.
 10. **Dependabot:** 7 open PRs and 2 moderate vulnerabilities on `main`.
@@ -197,6 +227,50 @@ install native packages with `npx expo install`.
     session without re-authentication. Turn it on in the same config push
     as Phase E.
 12. **Android never tested** (no Android SDK on this machine).
+
+---
+
+### 3a. Added since 09-22 (verified from git, 2026-10-14)
+- **Legal docs overhaul** (commits d34f9e9, 4c1de7a, 2f23d88, b23f258).
+  Terms and Privacy text now lives in ONE place,
+  `packages/shared/src/legal.ts` (structured content, not JSX). Web
+  (`apps/web/src/components/LegalDocument.tsx`) and mobile render it
+  natively, so they can't drift. The old `apps/web/src/lib/legal.ts` is
+  gone. `LEGAL_CONTACT_EMAIL` and `LEGAL_LAST_UPDATED` ("October 6, 2026")
+  and `LEGAL_CHANGELOG` are all in the shared file.
+- **Checked against USCIS's app-review checklist** (the text is pasted
+  into `docs/uscis-privacy-requirements.md`, which is gitignored on
+  purpose). Fixed a real font-size and contrast failure and two paragraphs
+  over grade 12. Added breach, business-transfer, CCPA, retention and
+  deletion-timing sections.
+- **Active re-consent** is real: migration 0019 adds
+  `profiles.legal_accepted_at` (backfilled from `created_at`);
+  `lib/legal-consent.ts` compares it to `LEGAL_LAST_UPDATED` and fails
+  OPEN on error; `app/legal-update.tsx` is a blocking screen with a
+  plain-language summary. "Not now" signs out, it doesn't delete. Signup
+  now records consent at account creation (it never did before).
+  Commit b23f258 fixed a race that skipped this screen. **Not yet
+  re-tested end to end by the user as far as the repo shows.**
+- **Sign-in:** required Name field (migration 0018 persists it);
+  Apple/Google/Facebook buttons are a **layout preview only, not wired
+  up** — tapping says so. Don't ship them like that.
+- **EOIR** (PR #20): shipped as described in §5/§6. Privacy Policy now
+  covers A-Numbers (commit a6f2fb8). CEAC partial-postback fix also on main.
+- **0016 `report_lookup_breakage()`** — the CEAC/EOIR breakage alert from
+  the old safety-net list is built (client-reported, allowlisted step
+  names, de-duplicated per provider per 6 h). The HTML snapshot test
+  fixture is still not built.
+- **0017 + `uscis-probe-4xx` function** (PR #21): USCIS replied 2026-09-22
+  that the 5-day streak was fine but they saw **no 4xx responses** and
+  want 5 more days of them. The probe sends a nonexistent receipt (404)
+  and a malformed one (400/422) hourly on weekdays inside the sandbox
+  window, hard-pinned to the sandbox URL. Evidence is in
+  `uscis_probe_runs`; the streak query is in the 0017 header. **Teardown
+  steps (migration 0018-style, but 0018 is now taken, so use 0020) are in
+  the 0017 header** — do them after production access is granted.
+- **Migrations 0018/0019 are already live** in the shared Supabase
+  project but only on `feature/sign-in-polish` in git. Merging that
+  branch brings git back in line with production.
 
 ---
 
@@ -487,6 +561,13 @@ for USCIS".
    - With the user's OK: reset `EAC9999103403`'s error count (§3 #2),
      ideally before the sandbox opens at 4 AM PT on a weekday.
    - Test the mobile Delete account button with a throwaway account.
+   - Test the re-consent screen end to end (bump `LEGAL_LAST_UPDATED` on a
+     scratch branch or clear `legal_accepted_at` on a throwaway account),
+     including "Not now" → signed out → sign back in.
+   - Merge `feature/sign-in-polish` (after deciding what to do about the
+     non-functional social sign-in buttons).
+   - Build the jakarallc.com site (`docs/WEBSITE_HANDOFF.md`); it supplies
+     the public Terms/Privacy/deletion URLs and the real contact email.
    - Arm the watchdog; **the user runs these in the Supabase SQL Editor**,
      so the key never passes through chat:
      ```sql
