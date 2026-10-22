@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, RefreshControl, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import {
@@ -101,7 +100,7 @@ export default function DashboardScreen() {
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [typeFilter, setTypeFilter] = useState<Set<CaseTypeFilter>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<StatusClass>>(new Set());
-  const [sheet, setSheet] = useState<"menu" | "sort" | "filter" | null>(null);
+  const [sheet, setSheet] = useState<"sort" | "filter" | null>(null);
   const [archivedExpanded, setArchivedExpanded] = useState(false);
 
   const activeFilterCount = typeFilter.size + statusFilter.size;
@@ -178,19 +177,10 @@ export default function DashboardScreen() {
     ]);
   }
 
-  // Cases is currently the only tab with a header icon: a hamburger that
-  // opens the HeaderMenu dropdown below (Notification settings, Help; more
-  // items get added there). See components/AppHeader.tsx.
-  const menuAction = {
-    icon: "menu-outline" as const,
-    onPress: () => setSheet("menu"),
-    accessibilityLabel: "Menu",
-  };
-
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <AppHeader leftAction={menuAction} />
+        <AppHeader />
         <CaseListSkeleton />
       </View>
     );
@@ -207,7 +197,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <AppHeader leftAction={menuAction} />
+      <AppHeader />
       <FlatList
       style={{ flex: 1, backgroundColor: colors.bg }}
       contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxxl }}
@@ -328,15 +318,6 @@ export default function DashboardScreen() {
       }
       />
 
-      <HeaderMenu
-        visible={sheet === "menu"}
-        onClose={() => setSheet(null)}
-        items={[
-          { icon: "notifications-outline", label: "Notification settings", href: "/notifications" },
-          { icon: "help-circle-outline", label: "Help & feedback", href: "/help" },
-        ]}
-      />
-
       <BottomSheet visible={sheet === "sort"} onClose={() => setSheet(null)} title="Sort by">
         {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
           <SheetOption key={opt} label={SORT_LABELS[opt]} selected={sortBy === opt} onPress={() => { setSortBy(opt); setSheet(null); }} />
@@ -384,74 +365,6 @@ export default function DashboardScreen() {
         )}
       </BottomSheet>
     </View>
-  );
-}
-
-/**
- * Dropdown anchored under the hamburger in the top-left corner, rather than
- * a bottom sheet: it should visibly come from the button that opened it.
- * The offset mirrors AppHeader's own layout (safe-area inset + its
- * vertical padding + icon height), so it lands just below the header.
- */
-function HeaderMenu({
-  visible,
-  onClose,
-  items,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  items: Array<{ icon: keyof typeof Ionicons.glyphMap; label: string; href: "/notifications" | "/help" }>;
-}) {
-  const { colors, spacing, radii, fontSize, cardShadow } = useTheme();
-  const insets = useSafeAreaInsets();
-  const top = insets.top + spacing.sm + 26 + spacing.sm + spacing.xs;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.15)" }} onPress={onClose} accessibilityLabel="Close menu">
-        <View
-          style={{
-            position: "absolute",
-            top,
-            left: spacing.lg,
-            minWidth: 230,
-            backgroundColor: colors.surface,
-            borderRadius: radii.lg,
-            borderWidth: 1,
-            borderColor: colors.border,
-            overflow: "hidden",
-            ...cardShadow,
-            shadowOpacity: 0.12,
-            shadowRadius: 12,
-            elevation: 6,
-          }}
-        >
-          {items.map((item, i) => (
-            <Pressable
-              key={item.href}
-              onPress={() => {
-                onClose();
-                router.push(item.href);
-              }}
-              accessibilityRole="menuitem"
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.md,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.lg,
-                backgroundColor: pressed ? colors.surfaceMuted : "transparent",
-                borderBottomWidth: i < items.length - 1 ? 1 : 0,
-                borderBottomColor: colors.border,
-              })}
-            >
-              <Ionicons name={item.icon} size={20} color={colors.accent} />
-              <Text style={{ fontSize: fontSize.base, color: colors.text }}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </Pressable>
-    </Modal>
   );
 }
 
