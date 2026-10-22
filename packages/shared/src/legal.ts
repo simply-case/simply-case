@@ -54,10 +54,10 @@ export interface LegalDocument {
  * definition (apps/web and apps/mobile both import it), so replacing it is
  * a one-line change here.
  */
-export const LEGAL_CONTACT_EMAIL = "contact@REPLACE-BEFORE-LAUNCH.invalid";
+export const LEGAL_CONTACT_EMAIL = "jakarallc@gmail.com";
 
 /** Shown on both documents — bump whenever the text below changes. */
-export const LEGAL_LAST_UPDATED = "October 6, 2026";
+export const LEGAL_LAST_UPDATED = "October 20, 2026";
 
 /**
  * One-line, plain-language summaries of what changed, newest first. Shown
@@ -73,6 +73,16 @@ export const LEGAL_LAST_UPDATED = "October 6, 2026";
  * bumped.
  */
 export const LEGAL_CHANGELOG: Array<{ date: string; summary: string }> = [
+  {
+    date: "October 20, 2026",
+    summary:
+      "We added a section on receipt numbers. It explains that we treat them as personal information, how we use them to check your case status, and how we store and protect them.",
+  },
+  {
+    date: "October 14, 2026",
+    summary:
+      "We now name Jakara LLC as the company that runs Simply Case. We added a section on your data-sharing choices and the risks, and a note about how tracking someone else's case can affect them. We also explained what happens to your data if the business shuts down.",
+  },
   {
     date: "October 6, 2026",
     summary:
@@ -90,6 +100,14 @@ const ul = (...items: string[]): LegalBlock => ({ kind: "list", items });
 
 function termsSections(contactEmail: string): LegalSection[] {
   return [
+    {
+      heading: "Who we are",
+      blocks: [
+        p(
+          "Simply Case is operated by Jakara LLC. In these terms, \"we,\" \"us,\" and \"our\" mean Jakara LLC.",
+        ),
+      ],
+    },
     {
       heading: "Not affiliated with any government agency",
       blocks: [
@@ -153,6 +171,14 @@ function termsSections(contactEmail: string): LegalSection[] {
 function privacySections(contactEmail: string): LegalSection[] {
   return [
     {
+      heading: "Who we are",
+      blocks: [
+        p(
+          "Simply Case is operated by Jakara LLC. In this policy, \"we,\" \"us,\" and \"our\" mean Jakara LLC.",
+        ),
+      ],
+    },
+    {
       heading: "What we store",
       blocks: [
         ul(
@@ -170,6 +196,35 @@ function privacySections(contactEmail: string): LegalSection[] {
         ),
         p(
           "We do not collect your location, financial information, medical information, or access your device's contacts.",
+        ),
+      ],
+    },
+    {
+      heading: "Receipt numbers are personal information",
+      blocks: [
+        p(
+          "A USCIS receipt number is personal information that can identify you or someone else. We collect the receipt numbers you add and treat them as personally identifiable information (PII), the same as your email address and name.",
+        ),
+        p("How we use them:"),
+        ul(
+          "When you add a case, we send its receipt number to USCIS's official case-status API to look up the current status.",
+          "We check the status again from time to time. We save the status history and email you when it changes.",
+          "We use receipt numbers only for this. We don't sell them, use them for advertising, or share them with anyone except USCIS and the service providers listed below.",
+        ),
+        p("How we store and protect them:"),
+        ul(
+          "Receipt numbers are stored in our Supabase database, linked to your account.",
+          "Database access rules allow each user to read only their own cases. Our automated status-checking process also has access, so it can look up your cases.",
+          "Receipt numbers travel over encrypted HTTPS connections between the app, our servers, and USCIS.",
+          "Our database provider encrypts stored data.",
+          "We don't intentionally write receipt numbers to our application logs, and the subject lines of our notification emails don't contain them.",
+          "Our service credentials are kept in protected server settings, not in the app.",
+        ),
+        p(
+          "When you remove a case or delete your account, your link to that receipt number is deleted. See \"How long we keep it\" for how this works when other users track the same case.",
+        ),
+        p(
+          "No system is perfectly secure. If we discover that your data was accessed without authorization, we'll notify you as described in \"If there's a data breach.\"",
         ),
       ],
     },
@@ -200,7 +255,7 @@ function privacySections(contactEmail: string): LegalSection[] {
           "Supabase — our database, authentication, and backend hosting provider.",
           "Vercel — hosts the web app.",
           "Resend — sends account and notification emails.",
-          "USCIS — when you add a case, your receipt number is sent to USCIS's official case-status API to check on it. This is the only way to look up a case's status.",
+          "USCIS — when you add a case, your receipt number is sent to USCIS's official case-status API to check on it. This is the only way to look up a case's status (see \"Receipt numbers are personal information\" above).",
         ),
         p("We don't share your data with anyone else."),
         p(
@@ -220,6 +275,34 @@ function privacySections(contactEmail: string): LegalSection[] {
         ),
         p(
           "If another Simply Case user is also tracking the same case or receipt number, you both see the same publicly-sourced status history for that case — that status information isn't private to either of you. Your own account details, like your name, your nickname for the case, and your notification settings, are never shared with other users.",
+        ),
+      ],
+    },
+    {
+      heading: "Your choices about sharing",
+      blocks: [
+        p(
+          "You decide what to give us. Adding a case is optional, and so are a nickname, a name, and notification settings. You can archive or remove a case, and you can delete your account at any time.",
+        ),
+        p(
+          "Sharing data is how the app works, and it has trade-offs.",
+        ),
+        ul(
+          "Benefit: when you add a case, we can check its status for you and email you when it changes.",
+          "Risk: your receipt number goes to USCIS, and your email address goes to our email provider. We trust these companies, but we can't control their systems.",
+          "Limit: government sites may be slow, wrong, or unavailable. Case information we show can be out of date.",
+          "Limit: if you stop sharing a case with us, we can no longer watch it for you.",
+        ),
+      ],
+    },
+    {
+      heading: "How your choices can affect other people",
+      blocks: [
+        p(
+          "A receipt number, an A-Number, or a visa case number can identify someone else, such as a spouse, a child, or a client. Only add a case if you have the right to track it.",
+        ),
+        p(
+          "If you add someone else's case, their case status goes through our systems and the government sites listed above. Please make sure they know and agree.",
         ),
       ],
     },
@@ -274,6 +357,9 @@ function privacySections(contactEmail: string): LegalSection[] {
         p(
           "If you'd rather not have your data transferred, you can delete your account before the transfer happens — see \"Deleting your account\" above.",
         ),
+        p(
+          "If Jakara LLC closes this business, we'll tell you by email first. We'll give you time to delete your account. Any data left after that is permanently and securely deleted.",
+        ),
       ],
     },
     {
@@ -281,6 +367,9 @@ function privacySections(contactEmail: string): LegalSection[] {
       blocks: [
         p(
           "Your data is stored in a Postgres database with row-level security, so only you (and, where applicable, our automated polling process) can access your case data. We never store your password in a readable form.",
+        ),
+        p(
+          "This includes your receipt numbers, which we treat as personal information. See \"Receipt numbers are personal information\" above.",
         ),
       ],
     },
