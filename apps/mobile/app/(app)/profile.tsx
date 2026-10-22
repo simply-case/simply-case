@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
-import { PRIVACY_URL, TERMS_URL, openContactEmail, openLegalPage } from "@/lib/links";
+import { openContactEmail } from "@/lib/links";
 import { Card } from "@/components/ui";
 import { AppHeader } from "@/components/AppHeader";
 
@@ -131,8 +131,8 @@ export default function ProfileScreen() {
         </Section>
 
         <Section title="Legal">
-          <SettingsRow icon="document-text-outline" label="Terms of Service" kind="external" onPress={() => openLegalPage(TERMS_URL)} />
-          <SettingsRow icon="shield-checkmark-outline" label="Privacy Policy" kind="external" onPress={() => openLegalPage(PRIVACY_URL)} isLast />
+          <SettingsRow icon="document-text-outline" label="Terms of Service" onPress={() => router.push("/legal/terms")} />
+          <SettingsRow icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => router.push("/legal/privacy")} isLast />
         </Section>
 
         <Section>

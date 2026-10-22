@@ -1,0 +1,403 @@
+/**
+ * The Terms of Service and Privacy Policy text, as structured content.
+ *
+ * This is the SINGLE source of truth for both platforms. It used to live as
+ * JSX inside apps/web's two legal pages, which meant the mobile app could
+ * only show it by opening the website in a browser sheet. Legal text living
+ * in two places is the kind of thing that quietly becomes wrong — a Privacy
+ * Policy that says different things in the app and on the site is a real
+ * problem, not a cosmetic one — so the text moved here and both platforms
+ * now render the same content with their own primitives.
+ *
+ * The public web pages must KEEP EXISTING regardless: App Store and Play
+ * Store review both require a reachable terms/privacy URL, and a reviewer
+ * is never signed in.
+ *
+ * ⚠️ NOT reviewed by a lawyer. Written to accurately describe what the
+ * product actually does (docs/PHASE_F_PLAN.md), which is a floor, not a
+ * substitute for real legal review before a public launch.
+ *
+ * Deliberately a small, closed format — paragraphs, bullet lists, and links
+ * to the *other* legal document — rather than Markdown or HTML. Both of
+ * those would need a parser/renderer on mobile, and arbitrary HTML in a
+ * native app is a bigger surface than this content ever needs.
+ */
+
+export type LegalDocId = "terms" | "privacy";
+
+/** A run of text, optionally linking to the other legal document. */
+export type LegalInline = string | { text: string; doc: LegalDocId };
+
+export type LegalBlock =
+  | { kind: "paragraph"; content: LegalInline[] }
+  | { kind: "list"; items: string[] };
+
+export interface LegalSection {
+  heading: string;
+  blocks: LegalBlock[];
+}
+
+export interface LegalDocument {
+  id: LegalDocId;
+  title: string;
+  lastUpdated: string;
+  sections: LegalSection[];
+}
+
+/**
+ * Contact address shown on both documents, and used for "Contact us" /
+ * "Send feedback" in the app.
+ *
+ * ⚠️ LAUNCH BLOCKER: must be replaced with a real, monitored address before
+ * any real user beyond the account owner can sign up — it's where someone
+ * would write to ask for their data to be deleted. This is now the ONE
+ * definition (apps/web and apps/mobile both import it), so replacing it is
+ * a one-line change here.
+ */
+export const LEGAL_CONTACT_EMAIL = "jakarallc@gmail.com";
+
+/** Shown on both documents — bump whenever the text below changes. */
+export const LEGAL_LAST_UPDATED = "October 20, 2026";
+
+/**
+ * One-line, plain-language summaries of what changed, newest first. Shown
+ * on the re-consent screen (app/legal-update.tsx) so a returning user sees
+ * what's different rather than the whole document again. Hand-written on
+ * purpose — diffing the structured content below into "plain language"
+ * automatically isn't something worth building; a human already knows what
+ * changed and can say it in one sentence.
+ *
+ * Each entry's `date` is a literal string, NOT a reference to
+ * LEGAL_LAST_UPDATED — that constant only ever holds the CURRENT date, so a
+ * reference would silently rewrite every past entry's date each time it's
+ * bumped.
+ */
+export const LEGAL_CHANGELOG: Array<{ date: string; summary: string }> = [
+  {
+    date: "October 20, 2026",
+    summary:
+      "We added a section on receipt numbers. It explains that we treat them as personal information, how we use them to check your case status, and how we store and protect them.",
+  },
+  {
+    date: "October 14, 2026",
+    summary:
+      "We now name Jakara LLC as the company that runs Simply Case. We added a section on your data-sharing choices and the risks, and a note about how tracking someone else's case can affect them. We also explained what happens to your data if the business shuts down.",
+  },
+  {
+    date: "October 6, 2026",
+    summary:
+      "Strengthened the \"If Simply Case changes ownership\" section: a new owner must now follow this same Privacy Policy, and you can delete your account first if you'd rather not have your data transferred.",
+  },
+  {
+    date: "October 2, 2026",
+    summary:
+      "We added new sections on data breaches, business transfers, and California privacy rights. We also clarified how long we keep your data and how email deletion requests are handled. Finally, we changed how we'll handle future policy updates — see \"Changes\" in the Terms.",
+  },
+];
+
+const p = (...content: LegalInline[]): LegalBlock => ({ kind: "paragraph", content });
+const ul = (...items: string[]): LegalBlock => ({ kind: "list", items });
+
+function termsSections(contactEmail: string): LegalSection[] {
+  return [
+    {
+      heading: "Who we are",
+      blocks: [
+        p(
+          "Simply Case is operated by Jakara LLC. In these terms, \"we,\" \"us,\" and \"our\" mean Jakara LLC.",
+        ),
+      ],
+    },
+    {
+      heading: "Not affiliated with any government agency",
+      blocks: [
+        p(
+          "Simply Case is an independent, third-party service. It is not affiliated with, endorsed by, or operated by U.S. Citizenship and Immigration Services (USCIS), the U.S. Department of State, the Executive Office for Immigration Review (EOIR), or any other U.S. government agency.",
+        ),
+      ],
+    },
+    {
+      heading: "Not legal advice",
+      blocks: [
+        p(
+          "Nothing in this app is legal advice. Case status information is retrieved from public and official government sources and may be delayed, incomplete, or incorrect. Always confirm your case's actual status on the relevant official government website before making any decision. If you need legal advice about an immigration matter, consult a licensed attorney.",
+        ),
+      ],
+    },
+    {
+      heading: "What the service does",
+      blocks: [
+        p(
+          "You may add case or receipt numbers you are authorized to track. We periodically check the status of those cases against the relevant official source and notify you of changes. You are responsible for only adding cases you have a legitimate right to track (for example, your own case, or one you are assisting with, with permission).",
+        ),
+      ],
+    },
+    {
+      heading: "Accounts",
+      blocks: [
+        p(
+          "You are responsible for keeping your account credentials secure. You may delete your account at any time from the Profile screen in the app; see our ",
+          { text: "Privacy Policy", doc: "privacy" },
+          " for what that does.",
+        ),
+      ],
+    },
+    {
+      heading: "No warranty",
+      blocks: [
+        p(
+          'The service is provided "as is," without warranty of any kind. We do not guarantee that case status information will always be accurate, complete, or available.',
+        ),
+      ],
+    },
+    {
+      heading: "Changes",
+      blocks: [
+        p(
+          "We may update these terms. If a change affects your rights or how your data is used, we'll ask you to actively agree to the updated terms the next time you open the app — simply continuing to use the app is not enough.",
+        ),
+        p(
+          "When that happens, we'll show you a short, plain-language summary of what changed, with a link to the full updated terms and privacy policy.",
+        ),
+      ],
+    },
+    {
+      heading: "Contact",
+      blocks: [p(`Questions about these terms: ${contactEmail}`)],
+    },
+  ];
+}
+
+function privacySections(contactEmail: string): LegalSection[] {
+  return [
+    {
+      heading: "Who we are",
+      blocks: [
+        p(
+          "Simply Case is operated by Jakara LLC. In this policy, \"we,\" \"us,\" and \"our\" mean Jakara LLC.",
+        ),
+      ],
+    },
+    {
+      heading: "What we store",
+      blocks: [
+        ul(
+          "Your account email address and password (handled by our authentication provider, Supabase).",
+          "Your name, if you give us one when creating your account.",
+          "Case or receipt numbers you add, an optional nickname you give them, and whether they're archived.",
+          "The status history we've observed for cases you track.",
+          "Your notification preferences per case, and quiet-hours settings.",
+          "A record of notifications sent to you, so we don't send duplicates.",
+          "Your timezone and preferred language, if you've set them.",
+          "A push-notification device token, once push notifications are available and you enable them.",
+          "If you use the Visa Bulletin personalization feature: your selected category, country, and priority date.",
+          "If you use visa-status (CEAC) tracking: the case or application identifier you enter.",
+          "If you track an immigration court (EOIR) case: the A-Number you enter. An A-Number is a government identification number, and we treat it with the same care as any other case identifier you give us.",
+        ),
+        p(
+          "We do not collect your location, financial information, medical information, or access your device's contacts.",
+        ),
+      ],
+    },
+    {
+      heading: "Receipt numbers are personal information",
+      blocks: [
+        p(
+          "A USCIS receipt number is personal information that can identify you or someone else. We collect the receipt numbers you add and treat them as personally identifiable information (PII), the same as your email address and name.",
+        ),
+        p("How we use them:"),
+        ul(
+          "When you add a case, we send its receipt number to USCIS's official case-status API to look up the current status.",
+          "We check the status again from time to time. We save the status history and email you when it changes.",
+          "We use receipt numbers only for this. We don't sell them, use them for advertising, or share them with anyone except USCIS and the service providers listed below.",
+        ),
+        p("How we store and protect them:"),
+        ul(
+          "Receipt numbers are stored in our Supabase database, linked to your account.",
+          "Database access rules allow each user to read only their own cases. Our automated status-checking process also has access, so it can look up your cases.",
+          "Receipt numbers travel over encrypted HTTPS connections between the app, our servers, and USCIS.",
+          "Our database provider encrypts stored data.",
+          "We don't intentionally write receipt numbers to our application logs, and the subject lines of our notification emails don't contain them.",
+          "Our service credentials are kept in protected server settings, not in the app.",
+        ),
+        p(
+          "When you remove a case or delete your account, your link to that receipt number is deleted. See \"How long we keep it\" for how this works when other users track the same case.",
+        ),
+        p(
+          "No system is perfectly secure. If we discover that your data was accessed without authorization, we'll notify you as described in \"If there's a data breach.\"",
+        ),
+      ],
+    },
+    {
+      heading: "What stays only on your phone",
+      blocks: [
+        p(
+          "Some government status pages ask for more than a case number. Anything extra you choose to save for those lookups is stored only in your device's secure storage (the iOS Keychain or Android Keystore). It is never sent to us, never stored on our servers, and never included in backups or logs we hold. If you reinstall the app or switch phones, you'll need to enter it again. This applies to:",
+        ),
+        ul(
+          "For visa-status (CEAC) cases: your passport number, the first five letters of your surname, and the consulate location.",
+          "For immigration court (EOIR) cases: your nationality.",
+        ),
+      ],
+    },
+    {
+      heading: "What we don't do",
+      blocks: [
+        p(
+          "We don't sell your data or use it for advertising. We don't use any analytics or crash-reporting service — there is none built into the app as of this writing. We also don't share de-identified, anonymized, or pseudonymized versions of your data with anyone.",
+        ),
+      ],
+    },
+    {
+      heading: "Who we share it with",
+      blocks: [
+        ul(
+          "Supabase — our database, authentication, and backend hosting provider.",
+          "Vercel — hosts the web app.",
+          "Resend — sends account and notification emails.",
+          "USCIS — when you add a case, your receipt number is sent to USCIS's official case-status API to check on it. This is the only way to look up a case's status (see \"Receipt numbers are personal information\" above).",
+        ),
+        p("We don't share your data with anyone else."),
+        p(
+          "The companies listed above may only use your data to provide their service to us. For example, Resend can only use your email address to send the messages we ask it to send. None of them may use your data for their own purposes, or share it with anyone else, without your active consent. Each of them is bound to handle your data consistent with this policy.",
+        ),
+        p(
+          "Visa-status (CEAC) and immigration court (EOIR) checks work differently. Those agencies don't offer us a way to look up a case on your behalf, so the app opens their official status page and fills in the details you gave us.",
+        ),
+        p(
+          "The request goes from your phone directly to that government website — the State Department for visa cases, the Executive Office for Immigration Review for court cases. It's the same as if you had typed it into their page yourself.",
+        ),
+        p(
+          "Those sites may set their own cookies. They have their own privacy policies and security checks, which we don't control.",
+        ),
+        p(
+          "We receive the result back so we can show it to you and save the status to your case history.",
+        ),
+        p(
+          "If another Simply Case user is also tracking the same case or receipt number, you both see the same publicly-sourced status history for that case — that status information isn't private to either of you. Your own account details, like your name, your nickname for the case, and your notification settings, are never shared with other users.",
+        ),
+      ],
+    },
+    {
+      heading: "Your choices about sharing",
+      blocks: [
+        p(
+          "You decide what to give us. Adding a case is optional, and so are a nickname, a name, and notification settings. You can archive or remove a case, and you can delete your account at any time.",
+        ),
+        p(
+          "Sharing data is how the app works, and it has trade-offs.",
+        ),
+        ul(
+          "Benefit: when you add a case, we can check its status for you and email you when it changes.",
+          "Risk: your receipt number goes to USCIS, and your email address goes to our email provider. We trust these companies, but we can't control their systems.",
+          "Limit: government sites may be slow, wrong, or unavailable. Case information we show can be out of date.",
+          "Limit: if you stop sharing a case with us, we can no longer watch it for you.",
+        ),
+      ],
+    },
+    {
+      heading: "How your choices can affect other people",
+      blocks: [
+        p(
+          "A receipt number, an A-Number, or a visa case number can identify someone else, such as a spouse, a child, or a client. Only add a case if you have the right to track it.",
+        ),
+        p(
+          "If you add someone else's case, their case status goes through our systems and the government sites listed above. Please make sure they know and agree.",
+        ),
+      ],
+    },
+    {
+      heading: "How long we keep it",
+      blocks: [
+        p(
+          "We keep your data for as long as your account exists. We don't automatically delete inactive accounts — if you stop using the app, your data stays exactly as described above until you delete your account yourself.",
+        ),
+        p(
+          "If you delete your account, your profile, tracked cases, notification history, and any case data that no one else is tracking are deleted immediately. A case that other users are also tracking stays in our system for their sake, but is no longer linked to you in any way.",
+        ),
+      ],
+    },
+    {
+      heading: "Deleting your account",
+      blocks: [
+        p(
+          "Deleting your account from Profile → Delete account in the app happens immediately.",
+        ),
+        p(
+          `If you'd rather email us at ${contactEmail}, we'll delete your account and data within 30 days of your request.`,
+        ),
+      ],
+    },
+    {
+      heading: "If there's a data breach",
+      blocks: [
+        p(
+          "If we discover that your data was accessed without authorization, we'll notify you without unreasonable delay by email. We'll tell you what happened and what steps you can take, if any — for example, changing your password.",
+        ),
+      ],
+    },
+    {
+      heading: "California privacy rights",
+      blocks: [
+        p(
+          "California residents may have extra rights under the California Consumer Privacy Act (CCPA). These include the right to know what personal information we have about you, and the right to ask us to delete it.",
+        ),
+        p(
+          "You can use the account deletion options above for either of these, or email us.",
+        ),
+        p("We don't sell personal information, so there's no sale to opt out of."),
+      ],
+    },
+    {
+      heading: "If Simply Case changes ownership",
+      blocks: [
+        p(
+          "If Simply Case is ever sold, merged, or otherwise transferred to a new owner, we'll notify you before your data is transferred. The new owner will be required to follow this same Privacy Policy.",
+        ),
+        p(
+          "If you'd rather not have your data transferred, you can delete your account before the transfer happens — see \"Deleting your account\" above.",
+        ),
+        p(
+          "If Jakara LLC closes this business, we'll tell you by email first. We'll give you time to delete your account. Any data left after that is permanently and securely deleted.",
+        ),
+      ],
+    },
+    {
+      heading: "Security",
+      blocks: [
+        p(
+          "Your data is stored in a Postgres database with row-level security, so only you (and, where applicable, our automated polling process) can access your case data. We never store your password in a readable form.",
+        ),
+        p(
+          "This includes your receipt numbers, which we treat as personal information. See \"Receipt numbers are personal information\" above.",
+        ),
+      ],
+    },
+    {
+      heading: "Contact",
+      blocks: [p(`Questions about this policy, or a data request: ${contactEmail}`)],
+    },
+  ];
+}
+
+export const LEGAL_DOC_TITLES: Record<LegalDocId, string> = {
+  terms: "Terms of Service",
+  privacy: "Privacy Policy",
+};
+
+/**
+ * Builds one legal document. `contactEmail` is injected rather than read
+ * from the constant directly so a caller can substitute one (a test, or a
+ * future per-environment address) without the text going stale.
+ */
+export function getLegalDocument(
+  id: LegalDocId,
+  contactEmail: string = LEGAL_CONTACT_EMAIL,
+): LegalDocument {
+  return {
+    id,
+    title: LEGAL_DOC_TITLES[id],
+    lastUpdated: LEGAL_LAST_UPDATED,
+    sections: id === "terms" ? termsSections(contactEmail) : privacySections(contactEmail),
+  };
+}

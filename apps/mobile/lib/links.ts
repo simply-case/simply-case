@@ -1,24 +1,23 @@
 import { Alert, Linking } from "react-native";
-import * as WebBrowser from "expo-web-browser";
+import { LEGAL_CONTACT_EMAIL } from "@mycasepro/shared";
 
-// The web app hosts the actual legal text (see sign-in.tsx for the same
-// pattern) — one place to keep it accurate.
+// The public copies of the legal documents. The APP no longer opens these
+// — it renders the same text natively from packages/shared/src/legal.ts
+// (app/legal/[doc].tsx). These URLs still matter because App Store and
+// Play Store review require a reachable terms/privacy URL for the store
+// listing, and a reviewer is never signed in.
 export const TERMS_URL = "https://simply-case-web.vercel.app/legal/terms";
 export const PRIVACY_URL = "https://simply-case-web.vercel.app/legal/privacy";
 
 /**
  * Where "Contact us" and "Send feedback" emails go.
  *
- * PLACEHOLDER — mirrors LEGAL_CONTACT_EMAIL in apps/web/src/lib/legal.ts,
- * which is also still a placeholder. Replace BOTH with the real address
- * (docs/HANDOFF.md §3, launch blocker). Never put a personal address here:
- * the repo is public.
+ * Re-exported from packages/shared so there is exactly ONE definition of
+ * this address across web and mobile — it used to be declared separately
+ * in both, which meant the launch blocker had to be remembered twice.
+ * Still a placeholder; see LEGAL_CONTACT_EMAIL for the warning.
  */
-export const CONTACT_EMAIL = "contact@REPLACE-BEFORE-LAUNCH.invalid";
-
-export function openLegalPage(url: string) {
-  return WebBrowser.openBrowserAsync(url);
-}
+export const CONTACT_EMAIL = LEGAL_CONTACT_EMAIL;
 
 /** Opens the user's mail app with a pre-filled subject. Shows an alert
  * instead while the address is still the placeholder, rather than handing
